@@ -1,0 +1,72 @@
+global
+    log /dev/log local0
+    log /dev/log local1 notice
+    chroot /var/lib/haproxy
+    stats timeout 30s
+    user haproxy
+    group haproxy
+    daemon
+    tune.bufsize 65536
+
+defaults
+    log global
+    mode http
+    option httplog
+    option logasap
+    option dontlognull
+    timeout connect 10s
+    timeout client 1m
+    timeout server 1m
+
+frontend rpc_frontend
+    bind *:8545
+    mode http
+    option httplog
+    option http-buffer-request
+    declare capture request len 32768
+    declare capture response len 32768
+    http-request capture req.body id 0
+    log-format "%ci:%cp [%tr] \"%r\" %ST %B %Tq/%Tw/%Tc/%Tr/%Tt %ft %b/%s %ac/%fc/%bc/%sc/%rc %sq/%bq {%hr} {%+Q} {%+ST} RequestBody: %[capture.req.hdr(0)] ResponseBody: %[capture.res.hdr(0)]"
+    http-response add-header Access-Control-Allow-Origin "*"
+    http-response add-header Access-Control-Allow-Methods "GET, POST, OPTIONS"
+    default_backend rpc_backend
+
+backend rpc_backend
+    mode http
+    http-reuse always
+    option forwardfor
+    http-response capture res.body id 0
+    server sepolia_rpc 127.0.0.1:18545 check inter 2s rise 2 fall 3
+
+frontend ws_frontend
+  bind *:8546
+  mode http
+  option httplog
+  option forwardfor
+  http-response add-header Access-Control-Allow-Origin "*"
+  http-response add-header Access-Control-Allow-Methods "GET, POST, OPTIONS"
+  default_backend ws_backend
+
+backend ws_backend
+  mode http
+  server sepolia_ws 127.0.0.1:18546 check
+
+frontend lighthouse_api
+  bind *:15052
+  mode http
+  option httplog
+  default_backend lighthouse_backend
+
+backend lighthouse_backend
+  mode http
+  server lighthouse 127.0.0.1:5052 check
+
+frontend lighthouse_validator
+  bind *:9000
+  mode tcp
+  option tcplog
+  default_backend validator_backend
+
+backend validator_backend
+  mode tcp
+  server validator 127.0.0.1:18900 check

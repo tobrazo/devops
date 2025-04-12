@@ -1,0 +1,6 @@
+---
+- name: Install and configure HAProxy as reverse proxy
+  hosts: all
+  become: true
+  roles:
+    - haproxy
