@@ -1,0 +1,29 @@
+config:
+  logFormat: pretty
+  logLevel: debug
+  receivers:
+    - elasticsearch:
+        hosts:
+          - https://192.168.1.100:9200
+        index: kube-events
+        indexFormat: kube-events-{2006-01-02}
+        username: "test"
+        password: "test123"
+        deDot: true
+        tls:
+          caFile: "/data/ca/http_ca.crt"
+        layout:
+          cluster: '{{ .InvolvedObject.Namespace }}'
+          message: '{{ .Message }}'
+  route:
+    routes:
+      - match:
+          - receiver: es-dump
+extraVolumeMounts:
+  - mountPath: /data/ca
+    name: http-ca
+extraVolumes:
+  - configMap:
+      defaultMode: 416
+      name: kubernetes-event-exporter-ca
+    name: http-ca
