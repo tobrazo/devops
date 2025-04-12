@@ -1,0 +1,2 @@
+- name: Include installation tasks
+  import_tasks: install.yml

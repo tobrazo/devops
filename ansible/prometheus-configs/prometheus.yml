@@ -1,0 +1,71 @@
+# Global scrape and evaluation intervals
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - 192.168.1.100:9093
+
+# Alerting rule files
+rule_files:
+  - "alert.rules.telegraf.yaml"
+  - "alert.rules.pve.yaml"
+  - "alert.rules.haproxy.yaml"
+  - "alert.rules.blackbox-exporter.yml"
+  - "alert.rules.mysqld-exporter.yml"
+  - "alert.rules.node-exporter.yml"
+  - "alert.rules.node-exporter.2.yml"
+  - "alert.rules.galera.yaml"
+  - "alert.rules.smartctl-exporter.yml"
+  - "alert.rules.zfs_exporter.yml"
+  - "alert.rules.redis-exporter.yml"
+  - "alert.rules.mongodb-exporter.yml"
+  - "alert.rules.ssl_exporter.yml"
+  - "alert.rules.systemd_exporter.yml"
+
+# Remote write to storage (e.g., VictoriaMetrics)
+remote_write:
+  - url: http://192.168.1.200:8428/api/v1/write
+    queue_config:
+      max_samples_per_send: 10000
+      capacity: 20000
+      max_shards: 30
+
+# Scrape configurations for exporters
+scrape_configs:
+
+  # Node Exporter metrics
+  - job_name: "node_exporter"
+    static_configs:
+      - targets:
+          - 192.168.1.101:9100
+
+  # Redis Exporter metrics
+  - job_name: "redis_exporter"
+    static_configs:
+      - targets:
+          - 192.168.1.100:9121
+
+  # MongoDB Exporter metrics
+  - job_name: "mongodb_exporter"
+    static_configs:
+      - targets:
+          - 192.168.1.102:9216
+
+  # SSL Certificate Exporter
+  - job_name: "ssl_exporter"
+    metrics_path: /probe
+    static_configs:
+      - targets:
+          - example.com:443
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: 127.0.0.1:9219

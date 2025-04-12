@@ -1,0 +1,87 @@
+stages:
+  - test
+  - deploy
+
+test_prometheus_configs:
+  stage: test
+  script:
+    - promtool check config prometheus.yml
+    - promtool check rules alert.rules.telegraf.yaml
+    - promtool check rules alert.rules.pve.yaml
+    - promtool check rules alert.rules.haproxy.yaml
+    - promtool check rules alert.rules.blackbox-exporter.yml
+    - promtool check rules alert.rules.galera.yaml
+    - promtool check rules alert.rules.mysqld-exporter.yml
+    - promtool check rules alert.rules.node-exporter.yml
+    - promtool check rules alert.rules.node-exporter.2.yml
+    - promtool check rules alert.rules.redis-exporter.yml
+    - promtool check rules alert.rules.smartctl-exporter.yml
+    - promtool check rules alert.rules.zfs_exporter.yml
+    - promtool check rules alert.rules.mongodb-exporter.yml
+    - promtool check rules alert.rules.ssl_exporter.yml
+    - promtool check rules alert.rules.systemd_exporter.yml
+  only:
+    - master
+  tags:
+    - prometheus
+
+test_alertmanager_configs:
+  stage: test
+  script:
+    - amtool check-config alertmanager.yml
+  only:
+    - master
+  tags:
+    - prometheus
+
+deploy_configs:
+  stage: deploy
+  script:
+    - |
+      RESTART_REQUIRED=false
+
+      for file in prometheus.yml alert.rules.telegraf.yaml alert.rules.pve.yaml alert.rules.haproxy.yaml alert.rules.blackbox-exporter.yml alert.rules.galera.yaml alert.rules.mysqld-exporter.yml alert.rules.node-exporter.yml alert.rules.node-exporter.2.yml alert.rules.smartctl-exporter.yml alert.rules.zfs_exporter.yml alert.rules.redis-exporter.yml alert.rules.mongodb-exporter.yml; do
+        if ! cmp -s $file /etc/prometheus/$file; then
+          echo "Files are different. Replacing $file"
+          sudo mv /etc/prometheus/$file /etc/prometheus/${file}_backup
+          sudo cp $file /etc/prometheus/
+          RESTART_REQUIRED=true
+        else
+          echo "Files are the same. No need to restart."
+        fi
+      done
+
+      if $RESTART_REQUIRED; then
+        echo "Restarting prometheus.service"
+        sudo systemctl restart prometheus.service
+        sleep 5
+        sudo systemctl status prometheus.service
+      else
+        echo "No files were replaced. No need to restart."
+      fi
+
+  only:
+    - master
+  tags:
+    - prometheus
+
+deploy_alertmanager:
+  stage: deploy
+  script:
+    - |
+      if ! cmp -s alertmanager.yml /etc/alertmanager/alertmanager.yml; then
+        echo "Files are different. Replacing alertmanager.yml with /etc/alertmanager/alertmanager.yml"
+        sudo mv /etc/alertmanager/alertmanager.yml /etc/alertmanager/alertmanager.yml_backup
+        sudo cp alertmanager.yml /etc/alertmanager/alertmanager.yml
+        echo "Restarting the alertmanager.service"
+        sudo systemctl restart alertmanager
+        sleep 5
+        sudo systemctl status alertmanager
+      else
+        echo "Files are the same. No need to replace."
+      fi
+
+  only:
+    - master
+  tags:
+    - prometheus

@@ -1,0 +1,98 @@
+groups:
+- name: Proxmox alerts
+  rules:
+  - alert: Proxmox node High Memory usage (critical)
+    expr: ((pve_memory_usage_bytes{id=~"node/.+"}) / (pve_memory_size_bytes{id=~"node/.+"}) * 100) > 90
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      description: '{{$labels.id}}: Memory usage is above 90% (current value is: {{ $value }})'
+      summary: 'High memory usage detected'
+
+  - alert: Proxmox node High Disk usage (critical)
+    expr: ((pve_disk_usage_bytes{id=~"node/.+"}) / (pve_disk_size_bytes{id=~"node/.+"}) * 100) > 90
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      description: '{{$labels.id}}: Disk usage is above 90% (current value is: {{ $value }})'
+      summary: 'Low data disk space detected'
+
+  - alert: Proxmox node High CPU usage (critical)
+    expr: (pve_cpu_usage_ratio{id=~"node/.+"} * 100) > 90
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      description: '{{$labels.id}}: CPU usage is above 90% (current value is: {{ $value }})'
+      summary: 'High CPU usage detected'
+
+  - alert: Proxmox node is Down
+    expr: pve_up{id=~"node/.+", id!="node/app8", id!="node/app9", id!="node/app7"} == 0
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      description: '{{$labels.id}} has been down for  more than 2 minutes.'
+      summary: Proxmox node down
+
+  # Replication alerts
+  - alert: Proxmox replication duration (warning)
+    expr: (pve_replication_duration{id=~"[0-9]{3,5}-[0-9]{1}"}) > 120
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      description: '{{$labels.id}}: Proxmox replication duration more then 2 min (current value is: {{ $value }})'
+      summary: 'Long replication detected'
+
+  - alert: Proxmox replication last sync (critical)
+    expr: (pve_replication_last_sync{id=~"[0-9]{3,5}-[0-9]{1}"}) < (pve_replication_last_try{id=~"[0-9]{3,5}-[0-9]{1}"})
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      description: '{{$labels.id}}: Proxmox replication last sync less than last try (current value is: {{ $value }})'
+      summary: 'Problme with replication detected'
+
+  - alert: Proxmox replication fail (critical)
+    expr: (pve_replication_fail_count{id=~"[0-9]{3,5}-[0-9]{1}"}) > 0
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      description: '{{$labels.id}}: Proxmox replication fail more than 1 (current value is: {{ $value }})'
+      summary: 'Fail replication detected'
+
+
+###
+
+  - alert: Proxmox vm/lxc High Memory usage (critical)
+    expr: ((pve_memory_usage_bytes / pve_memory_size_bytes * 100) * on(id) group_left(name, type, node) pve_guest_info) > 90 and on(id) pve_up == 1
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      description: '{{$labels.id}}: Memory usage is above 90% (current value is: {{ $value }})'
+      summary: 'High memory usage detected'
+
+  - alert: Proxmox lxc High Disk usage (critical)
+    expr: (sum by (id) (pve_disk_usage_bytes / pve_disk_size_bytes and on (id, instance) pve_guest_info{type="lxc"})* on(id) group_left(name, type, node) pve_guest_info) > 0.9
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      description: '{{$labels.id}}: Disk usage is above 90% (current value is: {{ $value }})'
+      summary: 'Low data disk space detected'
+      
+  
+
+  - alert: Proxmox vm/lxc High CPU usage (critical)
+    expr: (((pve_cpu_usage_ratio / pve_cpu_usage_limit) * on(id, instance) group_left(name, type) pve_guest_info) and on(id, instance) pve_up == 1) > 0.9
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      description: '{{$labels.id}}: CPU usage is above 90% (current value is: {{ $value }})'
+      summary: 'High CPU usage detected'

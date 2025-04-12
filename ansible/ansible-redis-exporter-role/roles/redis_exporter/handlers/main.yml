@@ -1,0 +1,28 @@
+---
+
+- name: restart redis_exporter
+  become: true
+  systemd:
+    daemon_reload: true
+    name: redis_exporter
+    state: restarted
+    enabled: yes
+  when:
+    - redis_exporter_start_service
+
+- name: pause
+  pause:
+    seconds: "{{ redis_exporter_start_delay }}"
+  when: redis_exporter_start_service
+
+- name: check status
+  command: systemctl status redis_exporter
+  ignore_errors: true
+  register: redis_exporter_service_status
+  become: true
+  when: redis_exporter_start_service
+
+- name: show status
+  debug:
+    msg: "redis_exporter status: {{ redis_exporter_service_status.stdout }}"
+  when: redis_exporter_start_service

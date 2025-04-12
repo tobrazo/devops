@@ -1,0 +1,6 @@
+---
+- name: Install Redis sentinel
+  apt:
+    name: redis-sentinel
+    state: present
+    update_cache: yes

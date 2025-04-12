@@ -1,0 +1,13 @@
+
+[Unit]
+Description=Redis Exporter
+After=network.target
+
+[Service]
+User=nobody
+Group=nogroup
+ExecStart={{ redis_exporter.binary_install_dir }}/redis_exporter --redis.addr=redis://localhost:6379 --redis.password={{ redis_exporter_requirepass }}
+
+
+[Install]
+WantedBy=multi-user.target

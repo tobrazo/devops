@@ -1,0 +1,6 @@
+---
+- name: Deploy Redis Cluster with Sentinel
+  hosts: all
+  become: true
+  roles:
+    - redis

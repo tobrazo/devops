@@ -1,0 +1,29 @@
+---
+- name: Configure Redis Sentinel
+  template:
+    src: sentinel.conf.j2
+    dest: /etc/redis/sentinel.conf
+    owner: redis
+    group: redis
+    mode: 0644
+
+- name: Install Redis Sentinel service file
+  copy:
+    src: redis-sentinel.service
+    dest: /etc/systemd/system/redis-sentinel.service
+    mode: 0644
+
+- name: Reload systemd
+  command: systemctl daemon-reload
+
+- name: Start and enable Redis Sentinel
+  systemd:
+    name: redis-sentinel
+    state: started
+    enabled: yes
+
+- name: restart Redis Sentinel
+  systemd:
+    name: redis-sentinel
+    state: restarted
+    enabled: yes

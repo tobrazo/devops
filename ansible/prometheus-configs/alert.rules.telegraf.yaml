@@ -1,0 +1,139 @@
+groups:
+- name: Basic alerts
+  rules:
+
+  - alert: High CPU usage 90% (critical)
+    expr: cpu_usage_idle{cpu=~"cpu-total"} < 10
+    for: 15m
+    labels:
+      severity: critical
+    annotations:
+      description: '{{$labels.host}}({{$labels.instance}}): has really high CPU usage for over 15m'
+      summary: 'High CPU Usage detected!'
+
+  - alert: High Disk Usage (critical)
+    expr: disk_used_percent{fstype!="devfs"} > 90
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      description: '{{$labels.host}}({{$labels.instance}}): Mount Point {{ $labels.path}}  is used above 90% (current value is: {{ $value }})'
+      summary: 'Low data disk space detected'
+
+  - alert: High Memory usage (critical)
+    expr: mem_used_percent > 90
+    for: 10m
+    labels:
+      severity: critical
+    annotations:
+      description: '{{$labels.host}}({{$labels.instance}}): Memory usage is above 90% (current value is: {{ $value }})'
+      summary: 'High memory usage detected'
+
+# Services down alert
+  - alert: Redis server service is Down
+    expr: systemd_units_active_code{name="redis-server.service",host!~".*-eu",host!~".+-redis-sentinel.+"} != 0
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      description: '{{$labels.instance}} of job {{$labels.job}} has been down for more than 1 minute.'
+      summary: Redis server service down
+
+  - alert: Redis sentinel service is Down
+    expr: systemd_units_active_code{name="redis-sentinel.service"} != 0
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      description: '{{$labels.instance}} of job {{$labels.job}} has been down for  more than 1 minutes.'
+      summary: Redis sentinel service down
+
+  - alert: mySQL service is Down
+    expr: systemd_units_active_code{name="mysql.service"} != 0
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      description: '{{$labels.instance}} of job {{$labels.job}} has been down for  more than 1 minutes.'
+      summary: mySQL service down
+
+  - alert: mongoDB service is Down
+    expr: systemd_units_active_code{name="mongod.service"} != 0
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      description: '{{$labels.instance}} of job {{$labels.job}} has been down for  more than 1 minutes.'
+      summary: mongoDB service down
+
+  - alert: proxySQL service is Down
+    expr: systemd_units_active_code{name="proxysql.service"} != 0
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      description: '{{$labels.instance}} of job {{$labels.job}} has been down for  more than 1 minutes.'
+      summary: proxySQL service down
+
+  - alert: nginx service is Down
+    expr: systemd_units_active_code{name="nginx.service"} != 0
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      description: '{{$labels.instance}} of job {{$labels.job}} has been down for  more than 1 minutes.'
+      summary: nginx service down
+
+  - alert: containerd service is Down
+    expr: systemd_units_active_code{name="containerd.service"} != 0
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      description: '{{$labels.instance}} of job {{$labels.job}} has been down for  more than 1 minutes.'
+      summary: containerd service down
+
+  - alert: elasticsearch service is Down
+    expr: systemd_units_active_code{name="elasticsearch.service"} != 0
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      description: '{{$labels.instance}} of job {{$labels.job}} has been down for  more than 1 minutes.'
+      summary: elasticsearch service down
+
+  - alert: grafana-server service is Down
+    expr: systemd_units_active_code{name="grafana-server.service"} != 0
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      description: '{{$labels.instance}} of job {{$labels.job}} has been down for  more than 1 minutes.'
+      summary: grafana-server service down
+
+  - alert: gitlab-runsvdir service is Down
+    expr: systemd_units_active_code{name="gitlab-runsvdir.service"} != 0
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      description: '{{$labels.instance}} of job {{$labels.job}} has been down for  more than 1 minutes.'
+      summary: gitlab-runsvdir service down
+
+  - alert: mysql cluster size is decreased
+    expr: mysql_wsrep_cluster_size < 4
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      description: '{{$labels.instance}} of job {{$labels.job}} cluster size is less than 4 more than 1 minutes.'
+      summary: mysql cluster size less than 4
+
+  - alert: rew mysql cluster size is decreased
+    expr: mysql_wsrep_cluster_size{job="managed_rew-mySQL_telegraf"} < 4
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      description: '{{$labels.instance}} of job {{$labels.job}} rew cluster size is less than 4 more than 1 minutes.'
+      summary: rew mysql cluster size less than 4

@@ -1,0 +1,19 @@
+---
+- name: Install Redis
+  include_tasks: install.yml
+
+- name: Install Redis sentinel
+  include_tasks: install_sentinel.yml
+  when: "'sentinels' in group_names"
+
+- name: Configure master
+  include_tasks: configure_master.yml
+  when: "'master' in group_names"
+
+- name: Configure slave
+  include_tasks: configure_slave.yml
+  when: "'slave' in group_names"
+
+- name: Configure Sentinel
+  include_tasks: sentinel.yml
+  when: "'sentinels' in group_names"

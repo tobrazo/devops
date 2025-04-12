@@ -1,0 +1,62 @@
+---
+# Ansible playbook to perform etcd compaction and defragmentation in RKE2
+
+# Example usage:
+# ansible-playbook -i inventory_example.ini etcd-maintenance.yml -l your-etcd-host
+
+- name: Compact and Defragment etcd
+  hosts: all
+  gather_facts: false
+  become: yes
+
+  tasks:
+    - name: Get Kubernetes Nodes
+      command: "/var/lib/rancher/rke2/bin/kubectl get nodes"
+      environment:
+        KUBECONFIG: "/etc/rancher/rke2/rke2.yaml"
+      register: kubernetes_nodes_output
+
+    - name: Show Kubernetes Nodes
+      debug:
+        var: kubernetes_nodes_output.stdout_lines
+
+    - name: Get etcd Pod Name
+      # Find the etcd pod name by label
+      command: "/var/lib/rancher/rke2/bin/kubectl -n kube-system get pod -l component=etcd -o jsonpath='{.items[0].metadata.name}'"
+      environment:
+        KUBECONFIG: "/etc/rancher/rke2/rke2.yaml"
+      register: etcd_pod_name
+
+    - name: Show etcd pod name
+      debug:
+        var: etcd_pod_name.stdout_lines
+
+    - name: Get etcd Revision
+      command: "/var/lib/rancher/rke2/bin/kubectl -n kube-system exec {{ etcd_pod_name.stdout }} -- sh -c 'ETCDCTL_ENDPOINTS=https://127.0.0.1:2379 ETCDCTL_CACERT=/var/lib/rancher/rke2/server/tls/etcd/server-ca.crt ETCDCTL_CERT=/var/lib/rancher/rke2/server/tls/etcd/server-client.crt ETCDCTL_KEY=/var/lib/rancher/rke2/server/tls/etcd/server-client.key ETCDCTL_API=3 etcdctl endpoint status --write-out fields | grep Revision | cut -d: -f2'"
+      environment:
+        KUBECONFIG: "/etc/rancher/rke2/rke2.yaml"
+      register: rev_output
+
+    - name: Show etcd Revision
+      debug:
+        var: rev_output.stdout_lines
+
+    - name: Compact etcd
+      command: "/var/lib/rancher/rke2/bin/kubectl -n kube-system exec {{ etcd_pod_name.stdout }} -- sh -c 'ETCDCTL_ENDPOINTS=https://127.0.0.1:2379 ETCDCTL_CACERT=/var/lib/rancher/rke2/server/tls/etcd/server-ca.crt ETCDCTL_CERT=/var/lib/rancher/rke2/server/tls/etcd/server-client.crt ETCDCTL_KEY=/var/lib/rancher/rke2/server/tls/etcd/server-client.key ETCDCTL_API=3 etcdctl compact {{ rev_output.stdout }}'"
+      environment:
+        KUBECONFIG: "/etc/rancher/rke2/rke2.yaml"
+      register: compact_output
+
+    - name: Show Compact Output
+      debug:
+        var: compact_output.stdout_lines
+
+    - name: Defragment etcd
+      command: "/var/lib/rancher/rke2/bin/kubectl -n kube-system exec {{ etcd_pod_name.stdout }} -- sh -c 'ETCDCTL_ENDPOINTS=https://127.0.0.1:2379 ETCDCTL_CACERT=/var/lib/rancher/rke2/server/tls/etcd/server-ca.crt ETCDCTL_CERT=/var/lib/rancher/rke2/server/tls/etcd/server-client.crt ETCDCTL_KEY=/var/lib/rancher/rke2/server/tls/etcd/server-client.key ETCDCTL_API=3 etcdctl defrag --cluster'"
+      environment:
+        KUBECONFIG: "/etc/rancher/rke2/rke2.yaml"
+      register: defrag_output
+
+    - name: Show Defrag Output
+      debug:
+        var: defrag_output.stdout_lines

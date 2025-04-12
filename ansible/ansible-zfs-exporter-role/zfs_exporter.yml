@@ -1,0 +1,6 @@
+---
+- name: Install and run ZFS Exporter
+  hosts: all
+  become: true
+  roles:
+    - zfs_exporter

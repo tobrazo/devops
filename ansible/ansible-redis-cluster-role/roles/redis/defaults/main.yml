@@ -1,0 +1,3 @@
+redis_password: ""
+requirepass: ""
+cluster_name: "my-cluster"

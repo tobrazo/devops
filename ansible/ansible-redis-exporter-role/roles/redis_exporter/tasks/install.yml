@@ -1,0 +1,60 @@
+---
+- name: Download redis_exporter binary to local folder
+  become: false
+  get_url:
+    url: "https://github.com/oliver006/redis_exporter/releases/download/v{{ redis_exporter_version }}/redis_exporter-v{{ redis_exporter_version }}.{{ redis_exporter_release }}.tar.gz"
+    dest: "/tmp/redis_exporter-{{ redis_exporter_version }}.{{ redis_exporter_release }}.tar.gz"
+    #checksum: "sha256:{{ redis_exporter_checksum }}"
+    mode: '0644'
+  register: download_binary
+  until: download_binary is succeeded
+  retries: 5
+  delay: 2
+
+- name: Verify redis_exporter binary exists
+  stat:
+    path: "/tmp/redis_exporter-{{ redis_exporter_version }}.{{ redis_exporter_release }}.tar.gz"
+  register: redis_exporter_file
+
+- name: Unpack redis_exporter binary
+  become: false
+  unarchive:
+    src: "/tmp/redis_exporter-{{ redis_exporter_version }}.{{ redis_exporter_release }}.tar.gz"
+    dest: "/tmp"
+    creates: "/tmp/redis_exporter-{{ redis_exporter_version }}.{{ redis_exporter_release }}/redis_exporter"
+    remote_src: yes
+  #delegate_to: localhost
+
+- name: Debug env and requirepass variables
+  debug:
+    msg: "env is {{ env }}, requirepass is {{ env }}/{{ redis_exporter_requirepass }}"
+
+- name: test
+  shell: "ls -la /tmp/"
+
+- name: Propagate redis_exporter binaries
+  copy:
+    src: "/tmp/redis_exporter-v{{ redis_exporter_version }}.{{ redis_exporter_release }}/redis_exporter"
+    dest: "{{ redis_exporter.binary_install_dir }}/redis_exporter"
+    mode: 0755
+    owner: root
+    group: root
+    remote_src: yes
+  #notify: restart redis_exporter
+
+
+
+
+
+- name: Copy the redis_exporter systemd service file
+  template:
+    src: redis_exporter.service.j2
+    dest: /etc/systemd/system/redis_exporter.service
+    owner: root
+    group: root
+    mode: 0644
+  notify:
+    - "restart redis_exporter"
+    - "pause"
+    - "check status"
+    - "show status"

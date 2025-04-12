@@ -1,0 +1,40 @@
+---
+- name: Ensure required packages are installed
+  apt:
+    name:
+      - curl
+      - jq
+    state: present
+    update_cache: yes
+
+- name: Download ZFS Exporter
+  get_url:
+    url: "https://github.com/pdf/zfs_exporter/releases/download/v{{ exporter_version }}/zfs_exporter-{{ exporter_version }}.linux-amd64.tar.gz"
+    dest: "/tmp/zfs_exporter-{{ exporter_version }}.linux-amd64.tar.gz"
+
+- name: Extract ZFS Exporter archive
+  unarchive:
+    src: "/tmp/zfs_exporter-{{ exporter_version }}.linux-amd64.tar.gz"
+    dest: /tmp
+    remote_src: yes
+
+- name: Copy zfs_exporter binary to /usr/local/bin
+  copy:
+    src: "/tmp/zfs_exporter-{{ exporter_version }}.linux-amd64/zfs_exporter"
+    dest: /usr/local/bin/zfs_exporter
+    mode: '0755'
+
+- name: Create systemd service for ZFS Exporter
+  template:
+    src: zfs-exporter.service.j2
+    dest: /etc/systemd/system/zfs-exporter.service
+
+- name: Reload systemd daemon
+  systemd:
+    daemon_reload: yes
+
+- name: Start and enable ZFS Exporter service
+  systemd:
+    name: zfs-exporter
+    state: started
+    enabled: yes

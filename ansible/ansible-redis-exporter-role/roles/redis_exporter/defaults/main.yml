@@ -1,0 +1,10 @@
+
+redis_exporter_version: "1.47.0"
+redis_exporter_release: "linux-amd64"
+
+redis_exporter:
+  binary_install_dir: "/usr/local/bin"
+
+redis_exporter_start_service: true
+redis_exporter_start_delay: 3
+redis_exporter_requirepass: ""

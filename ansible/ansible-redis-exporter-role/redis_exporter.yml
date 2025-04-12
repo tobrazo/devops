@@ -1,0 +1,6 @@
+---
+- name: Install Redis Exporter
+  hosts: all
+  become: true
+  roles:
+    - redis_exporter
