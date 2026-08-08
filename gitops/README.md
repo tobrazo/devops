@@ -69,6 +69,11 @@ class observ obs;
 class netsec warn;
 class rollouts,nginx deliver;
 class redis data;
+
+style git fill:transparent,stroke:#94a3b8,stroke-width:1px
+style argocd fill:transparent,stroke:#94a3b8,stroke-width:1px
+style platform fill:transparent,stroke:#94a3b8,stroke-width:1px
+style workloads fill:transparent,stroke:#94a3b8,stroke-width:1px
 ```
 
 ---
@@ -242,6 +247,12 @@ class vault warn;
 class rollouts deliver;
 class redis data;
 class workload deliver;
+
+style observability fill:transparent,stroke:#94a3b8,stroke-width:1px
+style networking fill:transparent,stroke:#94a3b8,stroke-width:1px
+style delivery fill:transparent,stroke:#94a3b8,stroke-width:1px
+style data fill:transparent,stroke:#94a3b8,stroke-width:1px
+style apps fill:transparent,stroke:#94a3b8,stroke-width:1px
 ```
 
 ---

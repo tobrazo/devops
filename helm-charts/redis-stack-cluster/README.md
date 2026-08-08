@@ -36,6 +36,7 @@ flowchart TB
   classDef obs stroke:#0ea5e9,stroke-width:2px;
   classDef edge stroke:#64748b,stroke-width:2px,stroke-dasharray:4 3;
   class Client edge; class SVC ctrl; class STS deliver; class Hook ctrl; class Conf data; class Exp,Prom obs;
+  style NS fill:transparent,stroke:#94a3b8,stroke-width:1px
 ```
 
 ## 🧱 What's inside
