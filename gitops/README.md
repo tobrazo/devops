@@ -1,78 +1,105 @@
-# GitOps Platform
+<div align="center">
 
-![ArgoCD](https://img.shields.io/badge/ArgoCD-App--of--Apps-EF7B4D?logo=argo)
-![Kubernetes](https://img.shields.io/badge/Kubernetes-1.30+-326ce5?logo=kubernetes)
-![GitOps](https://img.shields.io/badge/GitOps-Declarative-blue)
+# 🐙 GitOps Platform
 
-A **reusable ArgoCD app-of-apps template** with everything a new project needs on day one: metrics, logs, tracing, TLS/DNS, progressive delivery, secrets, and real-time messaging — plus a ready-to-copy **nginx** workload wired as an Argo Rollouts blue/green deployment.
+**A reusable ArgoCD app-of-apps — metrics, logs, tracing, TLS/DNS, progressive delivery, and secrets on day one.**
+
+![ArgoCD](https://img.shields.io/badge/ArgoCD-app--of--apps-EF7B4D?style=flat-square&logo=argo&logoColor=white)
+![Kubernetes](https://img.shields.io/badge/Kubernetes-1.30+-326CE5?style=flat-square&logo=kubernetes&logoColor=white)
+![GitOps](https://img.shields.io/badge/GitOps-declarative-1A73E8?style=flat-square&logo=git&logoColor=white)
+![Prometheus](https://img.shields.io/badge/Prometheus-metrics-E6522C?style=flat-square&logo=prometheus&logoColor=white)
+
+</div>
+
+---
+
+Everything a new project needs on its first sync — observability, TLS/DNS automation, progressive delivery, secrets, and real-time messaging — plus a ready-to-copy **nginx** workload wired as an Argo Rollouts blue/green deployment.
 
 Drop a new `Application` into `clusters/<env>/apps/workloads/` and the recursing root picks it up automatically.
 
 ---
 
-## Architecture Overview
+## 🏗️ Architecture
+
+Single cluster, app-of-apps. Two root Applications fan out to the platform and the workloads.
 
 ```mermaid
 flowchart TD
 
 subgraph git["Git Repository"]
-  repo[tobrazo/devops<br/>main branch · gitops/]
+  repo["tobrazo/devops<br/>main · gitops/"]
 end
 
 subgraph argocd["ArgoCD"]
-  platform_root[platform-root]
-  workloads_root[workloads-root]
-  image_updater[Image Updater]
+  platform_root["platform-root"]
+  workloads_root["workloads-root"]
+  image_updater["Image Updater"]
 end
 
 subgraph platform["Platform Apps"]
-  prometheus[Prometheus<br/>+ Grafana]
-  loki[Loki<br/>Logging]
-  tempo[Tempo<br/>Tracing]
-  otel[OpenTelemetry<br/>Operator]
-  certmgr[cert-manager]
-  extdns[external-dns]
-  rollouts[Argo Rollouts]
-  redis[(Redis)]
+  observ["Prometheus · Grafana<br/>Loki · Tempo · OTel"]
+  netsec["cert-manager · external-dns<br/>Vault"]
+  rollouts["Argo Rollouts"]
+  redis[("Redis")]
 end
 
 subgraph workloads["Workload Apps"]
-  nginx[nginx-demo<br/>blue/green Rollout]
+  nginx["nginx-prod<br/>blue/green Rollout"]
 end
 
 repo -->|sync| platform_root
 repo -->|sync| workloads_root
-platform_root --> prometheus
-platform_root --> loki
-platform_root --> tempo
-platform_root --> otel
-platform_root --> certmgr
-platform_root --> extdns
+platform_root --> observ
+platform_root --> netsec
 platform_root --> rollouts
 platform_root --> redis
 workloads_root --> nginx
 image_updater -.->|update tags| workloads_root
+
+classDef edge stroke:#64748b,stroke-width:2px,stroke-dasharray:4 3;
+classDef ctrl stroke:#6366f1,stroke-width:2px;
+classDef obs stroke:#0ea5e9,stroke-width:2px;
+classDef warn stroke:#ef4444,stroke-width:2px;
+classDef deliver stroke:#10b981,stroke-width:2px;
+classDef data stroke:#f59e0b,stroke-width:2px;
+
+class repo edge;
+class platform_root,workloads_root,image_updater ctrl;
+class observ obs;
+class netsec warn;
+class rollouts,nginx deliver;
+class redis data;
 ```
 
 ---
 
-## CI/CD Flow
+## 🔀 CI/CD Flow
 
 ```mermaid
 flowchart LR
 
-code[Code Push] -->|trigger| build[Build Image]
-build --> push[Push to GHCR]
-push --> image[ghcr.io/tobrazo/*]
-image -.->|watch| updater[Image Updater<br/>newest-build]
-updater -->|write-back| sync[ArgoCD Sync]
-sync --> deploy[Rollout / Deploy]
-deploy --> pods[New Pods]
+code["Code Push"] -->|trigger| build["Build Image"]
+build --> push["Push to GHCR"]
+push --> image["ghcr.io/tobrazo/*"]
+image -.->|watch| updater["Image Updater<br/>newest-build"]
+updater -->|write-back| sync["ArgoCD Sync"]
+sync --> deploy["Rollout / Deploy"]
+deploy --> pods["New Pods"]
+
+classDef edge stroke:#64748b,stroke-width:2px,stroke-dasharray:4 3;
+classDef data stroke:#f59e0b,stroke-width:2px;
+classDef ctrl stroke:#6366f1,stroke-width:2px;
+classDef deliver stroke:#10b981,stroke-width:2px;
+
+class code edge;
+class build,push,image data;
+class updater,sync ctrl;
+class deploy,pods deliver;
 ```
 
 ---
 
-## Directory Structure
+## 📂 Directory Structure
 
 ```text
 gitops/
@@ -83,7 +110,7 @@ gitops/
 │       └── apps/
 │           ├── platform-root.yaml    # app-of-apps root (platform)
 │           ├── workloads-root.yaml   # app-of-apps root (workloads)
-│           ├── platform/             # Platform components (Applications)
+│           ├── platform/             # 15 platform Applications
 │           └── workloads/            # Workload Applications (nginx-prod)
 ├── platform/                         # Shared platform manifests / charts
 │   ├── cert-manager-external-dns/    # ClusterIssuer + DNS token secret
@@ -100,13 +127,12 @@ gitops/
 └── reset-argocd-apps.sh              # Recovery script
 ```
 
-> Single cluster, namespace-per-component. Argo Rollouts CRDs are installed by
-> the `argo-rollouts` platform app (chart-managed), so the nginx workload's
-> `Rollout` resolves on first sync.
+> [!NOTE]
+> Single cluster, namespace-per-component. Argo Rollouts CRDs are installed by the `argo-rollouts` platform app (sync-wave `-5`, chart-managed), so the nginx workload's `Rollout` resolves on first sync.
 
 ---
 
-## Root Applications
+## 🧱 Root Applications
 
 Two root ArgoCD Applications manage everything (app-of-apps):
 
@@ -119,7 +145,10 @@ Both use `directory.recurse: true` — child Applications are discovered automat
 
 ---
 
-## Bootstrap
+## 🚀 Bootstrap
+
+<details open>
+<summary><b>Apply the AppProjects and roots, then watch it converge</b></summary>
 
 ```bash
 # 1) AppProjects
@@ -134,12 +163,17 @@ kubectl apply -f clusters/prod/apps/workloads-root.yaml
 argocd app list
 argocd app get platform-root
 ```
+</details>
 
-> Before syncing, create the required Secrets referenced by the platform (they are **not** committed): the cert-manager/external-dns Cloudflare API token (`platform/cert-manager-external-dns/secrets.yaml` — placeholders), Grafana admin password, and the Alertmanager Discord webhook. See the placeholders in `platform/monitoring/kube-prometheus/values*.yaml`.
+> [!IMPORTANT]
+> Some components need secrets you provide — they are **not** committed. Before syncing, create: the cert-manager/external-dns Cloudflare API token (`platform/cert-manager-external-dns/secrets.yaml` ships placeholders), the Grafana admin password, and the Alertmanager Discord webhook. See the `REPLACE_WITH_*` / `changeme` placeholders in `platform/monitoring/kube-prometheus/values*.yaml`.
+
+> [!WARNING]
+> Vault installs via GitOps but **init / unseal / configure is a manual runbook** — unseal keys and the root token must never live in Git. Follow `platform/vault/README.md` after the `vault` app is synced.
 
 ---
 
-## Workloads Sync Order
+## 🕒 Workloads Sync Order
 
 Applications deploy in order using `sync-wave` annotations. This template ships a single demo workload:
 
@@ -151,36 +185,36 @@ Add more workloads at higher waves as needed (backend → frontend → …).
 
 ---
 
-## Platform Stack
+## 🧱 Platform Stack
 
 ```mermaid
 flowchart TB
 
 subgraph observability["Observability"]
-  prometheus[Prometheus<br/>Metrics]
-  grafana[Grafana<br/>Dashboards]
-  loki[Loki<br/>Logs]
-  tempo[Tempo<br/>Traces]
-  otel[OTel Collector]
+  prometheus["Prometheus<br/>Metrics"]
+  grafana["Grafana<br/>Dashboards"]
+  loki["Loki<br/>Logs"]
+  tempo["Tempo<br/>Traces"]
+  otel["OTel Collector"]
 end
 
 subgraph networking["Networking & Security"]
-  certmgr[cert-manager<br/>TLS Certificates]
-  extdns[external-dns<br/>DNS Automation]
-  ingress[NGINX Ingress]
-  vault[Vault<br/>Secrets]
+  certmgr["cert-manager<br/>TLS Certificates"]
+  extdns["external-dns<br/>DNS Automation"]
+  ingress["NGINX Ingress"]
+  vault["Vault<br/>Secrets"]
 end
 
 subgraph delivery["Delivery"]
-  rollouts[Argo Rollouts<br/>Blue/Green · Canary]
+  rollouts["Argo Rollouts<br/>Blue/Green · Canary"]
 end
 
 subgraph data["Data"]
-  redis[(Redis<br/>Cache)]
+  redis[("Redis<br/>Cache")]
 end
 
 subgraph apps["Applications"]
-  workload[Workload Pods]
+  workload["Workload Pods"]
 end
 
 workload -->|metrics| prometheus
@@ -195,29 +229,48 @@ extdns -->|DNS| ingress
 rollouts -->|manages| workload
 vault -.->|secrets| workload
 workload --> redis
+
+classDef obs stroke:#0ea5e9,stroke-width:2px;
+classDef ctrl stroke:#6366f1,stroke-width:2px;
+classDef warn stroke:#ef4444,stroke-width:2px;
+classDef deliver stroke:#10b981,stroke-width:2px;
+classDef data stroke:#f59e0b,stroke-width:2px;
+
+class prometheus,grafana,loki,tempo,otel obs;
+class certmgr,extdns,ingress ctrl;
+class vault warn;
+class rollouts deliver;
+class redis data;
+class workload deliver;
 ```
 
 ---
 
-## Platform Components
+## 🧩 Platform Components
 
-| Component | Chart/Source | Namespace | Purpose |
-|-----------|--------------|-----------|---------|
-| kube-prometheus-stack | prometheus-community | monitoring | Metrics & Grafana |
-| loki-stack | grafana | logs | Log aggregation |
-| tempo | grafana | tempo | Distributed tracing |
-| opentelemetry-operator | open-telemetry | otel | Auto-instrumentation |
-| cert-manager | jetstack | cert-manager | TLS certificates |
-| external-dns | kubernetes-sigs | kube-system | DNS automation |
-| argo-rollouts | argoproj | argo-rollouts | Progressive delivery |
-| argocd-image-updater | argoproj | argocd | Image auto-updates |
-| centrifugo | in-tree chart | centrifugo | Real-time messaging |
-| vault | hashicorp | vault | Secrets management |
-| redis | bitnami | redis | In-memory cache |
+15 ArgoCD Applications, ordered by `sync-wave`:
+
+| Wave | Application | Chart / Source | Namespace | Purpose |
+|------|-------------|----------------|-----------|---------|
+| -5 | `argo-rollouts` | argoproj | argo-rollouts | Progressive delivery + CRDs |
+| 0 | `prometheus-crds` | prometheus-community | argocd | Prometheus operator CRDs |
+| 3 | `redis` | bitnami | redis | In-memory cache |
+| 5 | `prometheus-stack` | prometheus-community | monitoring | Metrics & Grafana |
+| 5 | `loki-stack` | grafana | logs | Log aggregation |
+| 5 | `opentelemetry-operator` | open-telemetry | monitoring | Auto-instrumentation |
+| 5 | `centrifugo` | in-tree chart | centrifugo | Real-time messaging |
+| 5 | `vault` | hashicorp | vault | Secrets management |
+| 8 | `cert-manager` | jetstack | cert-manager | TLS certificates |
+| 10 | `tempo` | grafana | monitoring | Distributed tracing |
+| 15 | `cert-manager-issuer` | in-tree | cert-manager | ClusterIssuer (ACME) |
+| 15 | `monitoring-custom` | in-tree | monitoring | Dashboards & alert rules |
+| 15 | `otel-additional-resources` | in-tree | monitoring | Collector / instrumentation |
+| 20 | `external-dns` | kubernetes-sigs | kube-system | DNS automation |
+| 20 | `argocd-image-updater` | argoproj | argocd | Image auto-updates |
 
 ---
 
-## Image Updater
+## 🔄 Image Updater
 
 Workload Applications can carry ArgoCD Image Updater annotations:
 
@@ -233,7 +286,10 @@ New images are detected and the tag is written back into the Application automat
 
 ---
 
-## Adding a New Workload
+## ➕ Adding a New Workload
+
+<details>
+<summary><b>Copy the nginx chart, add an Application, commit</b></summary>
 
 1. Add a Helm chart under `workloads/<app-name>/` (copy `workloads/nginx/` as a starting point).
 
@@ -265,10 +321,11 @@ spec:
 ```
 
 3. Commit and push — the recursing `workloads-root` picks it up and ArgoCD syncs.
+</details>
 
 ---
 
-## Roadmap / TODOs
+## 🧪 Roadmap / TODOs
 
 - Store webhook URLs and API tokens in Vault (out of Git).
 - Add NetworkPolicies for workload isolation.

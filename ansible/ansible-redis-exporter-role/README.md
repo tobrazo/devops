@@ -1,4 +1,16 @@
-# 📦 Ansible Role: Redis Exporter
+<div align="center">
+
+# 📈 Ansible Role: Redis Exporter
+
+**Installs the Redis Exporter as a systemd service, exposing Redis metrics to Prometheus.**
+
+![Ansible](https://img.shields.io/badge/Ansible-role-EE0000?style=flat-square&logo=ansible&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-metrics-DC382D?style=flat-square&logo=redis&logoColor=white)
+![Prometheus](https://img.shields.io/badge/Prometheus-scrape-E6522C?style=flat-square&logo=prometheus&logoColor=white)
+
+</div>
+
+---
 
 This Ansible role installs and configures the [Redis Exporter](https://github.com/oliver006/redis_exporter) for Prometheus monitoring.
 
@@ -50,6 +62,9 @@ Systemd service will be installed as `/etc/systemd/system/redis_exporter.service
 The service will connect to: `redis://localhost:6379`
 
 Metrics exposed on: `http://localhost:9121/metrics`
+
+> [!TIP]
+> If Redis requires AUTH, set `redis_exporter_requirepass` from Ansible Vault or `--extra-vars` rather than committing the password.
 
 ---
 
