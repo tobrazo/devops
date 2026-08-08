@@ -1,4 +1,16 @@
-# 📦 Ansible Role: Redis Cluster with Sentinel
+<div align="center">
+
+# 🧠 Ansible Role: Redis Cluster with Sentinel
+
+**Deploys a Redis master/replica pair plus a Sentinel quorum with AUTH and automatic failover.**
+
+![Ansible](https://img.shields.io/badge/Ansible-role-EE0000?style=flat-square&logo=ansible&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-master%2Freplica-DC382D?style=flat-square&logo=redis&logoColor=white)
+![Sentinel](https://img.shields.io/badge/Sentinel-failover-DC382D?style=flat-square&logo=redis&logoColor=white)
+
+</div>
+
+---
 
 This role deploys a full Redis cluster including:
 - Redis master
@@ -54,6 +66,9 @@ redis_password: ""      # Password for Redis AUTH
 requirepass: ""         # Sentinel requirepass
 cluster_name: "my-cluster"
 ```
+
+> [!TIP]
+> Keep `redis_password` and `requirepass` out of the repo — supply them from Ansible Vault or `--extra-vars` at run time rather than committing real secrets.
 
 ---
 

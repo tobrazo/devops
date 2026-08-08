@@ -1,4 +1,16 @@
-# 📦 Ansible Role: ZFS Exporter
+<div align="center">
+
+# 💾 Ansible Role: ZFS Exporter
+
+**Installs the ZFS Exporter as a systemd service, exposing ZFS filesystem metrics to Prometheus.**
+
+![Ansible](https://img.shields.io/badge/Ansible-role-EE0000?style=flat-square&logo=ansible&logoColor=white)
+![ZFS](https://img.shields.io/badge/ZFS-filesystem-1F6FEB?style=flat-square)
+![Prometheus](https://img.shields.io/badge/Prometheus-scrape-E6522C?style=flat-square&logo=prometheus&logoColor=white)
+
+</div>
+
+---
 
 This Ansible role installs and configures the [ZFS Exporter](https://github.com/pdf/zfs_exporter) for Prometheus monitoring.
 

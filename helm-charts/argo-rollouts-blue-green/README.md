@@ -1,104 +1,113 @@
-# tobrazo-app — Argo Rollouts Blue/Green
+<div align="center">
 
-![Helm](https://img.shields.io/badge/Helm-Chart-blue?logo=helm)
-![Argo Rollouts](https://img.shields.io/badge/Argo-Rollouts-orange?logo=argo)
-![Kubernetes](https://img.shields.io/badge/Kubernetes-1.30+-326ce5?logo=kubernetes)
+# 🔀 Argo Rollouts Blue/Green
 
-A self-contained example Helm chart for **blue/green delivery with Argo Rollouts**, GitOps-managed by ArgoCD. It demonstrates a full progressive-delivery setup you can drop onto any web/API workload.
+**A self-contained blue/green delivery chart — active/preview services, a real k6 pre-promotion gate, and a matching ArgoCD Application. Runs out of the box.**
 
-The same chart renders **either** an Argo `Rollout` (blue/green) **or** a plain `Deployment`, controlled by `controller.type`.
+![Helm](https://img.shields.io/badge/Helm-3-0F1689?style=flat-square&logo=helm&logoColor=white)
+![Argo Rollouts](https://img.shields.io/badge/Argo_Rollouts-blue%2Fgreen-EF7B4D?style=flat-square&logo=argo&logoColor=white)
+![Kubernetes](https://img.shields.io/badge/Kubernetes-1.30+-326CE5?style=flat-square&logo=kubernetes&logoColor=white)
+![helm lint](https://img.shields.io/badge/helm_lint-passing-3FB950?style=flat-square)
 
----
-
-## What's Inside
-
-- **Argo Rollout** — blue/green with a preview ReplicaSet and manual (or automated) promotion
-- **k6 Analysis** — pre-promotion smoke test that gates the cutover
-- **Services** — active (blue), preview (green), and a stable service for Deployment mode
-- **Ingress** — NGINX ingress + a dedicated preview ingress, CORS and rate-limiting
-- **HPA / PDB** — horizontal scaling (targets the Rollout) and disruption budget
-- **ConfigMap / Secret** — runtime config via `envFrom` (secrets referenced, never committed)
-- **ArgoCD Application** — `application.yaml`, with `ignoreDifferences` + argocd-image-updater wiring
+</div>
 
 ---
 
-## Architecture
+An example Helm chart for **blue/green delivery with Argo Rollouts**, GitOps-managed by ArgoCD. It demonstrates a full progressive-delivery setup you can drop onto any web/API workload. The same chart renders **either** an Argo `Rollout` (blue/green) **or** a plain `Deployment`, selected by `controller.type`.
+
+The default image is a **runnable public** one (`nginxinc/nginx-unprivileged`, non-root, listens on `8080`), so `helm install` works with no extra setup — swap `image.*` for your own app.
+
+## 🏗️ Architecture
 
 ```mermaid
 flowchart TD
+  lb["🌍 Load Balancer / CDN"] -->|HTTP/S| ingress["🚪 ingress<br/>tobrazo-app.example.com"]
+  lb -. HTTP/S .-> pIngress["🚪 preview ingress<br/>tobrazo-app-preview.example.com"]
 
-subgraph edge["Edge"]
-  lb[Load Balancer / CDN]
-end
+  ingress -->|active| svcA["🟦 Service: active<br/>tobrazo-app"]
+  pIngress -. preview .-> svcP["🟩 Service: preview<br/>tobrazo-app-preview"]
 
-subgraph chart["Helm Chart: tobrazo-app"]
-  ingress[ingress-nginx<br/>tobrazo-app.example.com]
-  previewIngress[preview ingress<br/>tobrazo-app-preview.example.com]
-  svc_active[tobrazo-app<br/>Active/blue]
-  svc_preview[tobrazo-app-preview<br/>Preview/green]
-  rollout[Argo Rollout<br/>Blue/Green]
-  pods[App Pods<br/>Port: 8080/TCP]
-  analysis[k6 Analysis<br/>Smoke Tests]
-end
+  svcA --> pods["🧱 App pods :8080"]
+  svcP -. green .-> pods
+  rollout["⚙️ Argo Rollout<br/>blueGreen"] --> pods
+  analysis["🧪 k6 analysis"] -. gates .-> rollout
 
-subgraph data["Data Layer"]
-  redis[(Redis Cluster)]
-end
-
-subgraph observability["Observability"]
-  otel[OpenTelemetry<br/>Auto-Instrumentation]
-  tempo[Tempo<br/>Tracing]
-end
-
-lb -->|HTTP/S| ingress
-lb -.->|HTTP/S| previewIngress
-ingress -->|active| svc_active
-previewIngress -.->|preview| svc_preview
-svc_active --> pods
-svc_preview -.-> pods
-rollout --> pods
-analysis -.->|validate preview| rollout
-pods -->|6379| redis
-otel -.->|instrument| pods
-otel -->|OTLP| tempo
+  classDef ctrl stroke:#6366f1,stroke-width:2px;
+  classDef deliver stroke:#10b981,stroke-width:2px;
+  classDef obs stroke:#0ea5e9,stroke-width:2px;
+  classDef edge stroke:#64748b,stroke-width:2px,stroke-dasharray:4 3;
+  class lb,ingress,pIngress edge; class svcA,svcP ctrl; class pods,rollout deliver; class analysis obs;
 ```
 
----
-
-## CI/CD Flow
+## 🔁 Blue/green strategy
 
 ```mermaid
 flowchart LR
+  deploy["📦 New image<br/>pushed"] --> preview["🟩 Preview ReplicaSet<br/>created"]
+  preview --> k6["🧪 k6 smoke test<br/>vs preview Service"]
+  k6 --> decision{"Analysis<br/>pass?"}
+  decision -->|yes| promote["✅ Promote to active<br/>scale down old"]
+  decision -->|no| abort["⛔ Abort<br/>keep current"]
 
-code[Code Push] -->|trigger| build[Build Image]
-build --> push[Push to GHCR]
-push --> image[ghcr.io/tobrazo/tobrazo-app]
-image -.->|watch| updater[Image Updater<br/>newest-build]
-updater -->|write-back tag| sync[ArgoCD Sync]
-sync --> rollout[Argo Rollout]
-rollout --> analysis[k6 Analysis]
-analysis -->|pass/fail| promote[Promote / Abort]
+  classDef deliver stroke:#10b981,stroke-width:2px;
+  classDef obs stroke:#0ea5e9,stroke-width:2px;
+  classDef ctrl stroke:#6366f1,stroke-width:2px;
+  classDef warn stroke:#ef4444,stroke-width:2px;
+  class deploy,preview deliver; class k6,decision obs; class promote ctrl; class abort warn;
 ```
 
----
+Live traffic stays on the **active** service while the new version comes up behind the **preview** service. `prePromotionAnalysis` runs a k6 Job against the in-cluster preview Service; only if it passes is the rollout promotable. With `autoPromotionEnabled: false` the cutover is a manual `promote`, and `scaleDownDelaySeconds: 30` keeps the old ReplicaSet briefly for fast rollback.
 
-## Blue/Green Strategy
+<details>
+<summary><b>CI/CD flow (with argocd-image-updater)</b></summary>
 
 ```mermaid
 flowchart LR
+  code["📝 Code push"] -->|trigger| build["🔨 Build image"]
+  build --> push["📤 Push to registry"]
+  push --> updater["👁️ Image Updater<br/>newest-build"]
+  updater -->|write-back tag| sync["🐙 ArgoCD sync"]
+  sync --> rollout["⚙️ Argo Rollout"]
+  rollout --> analysis["🧪 k6 analysis"]
+  analysis -->|pass / fail| promote["✅ Promote / ⛔ abort"]
 
-deploy[New Image<br/>Pushed] --> preview[Preview ReplicaSet<br/>Created]
-preview --> k6[k6 Smoke Tests<br/>Run]
-k6 --> decision{Analysis<br/>Pass?}
-decision -->|Yes| promote[Promote to Active<br/>Scale Down Old]
-decision -->|No| abort[Abort Rollout<br/>Keep Current]
+  classDef deliver stroke:#10b981,stroke-width:2px;
+  classDef ctrl stroke:#6366f1,stroke-width:2px;
+  classDef obs stroke:#0ea5e9,stroke-width:2px;
+  classDef edge stroke:#64748b,stroke-width:2px,stroke-dasharray:4 3;
+  class code,build,push edge; class updater,sync,rollout ctrl; class analysis,promote obs;
 ```
+</details>
 
-The Rollout keeps live traffic on the **active** service while the new version comes up behind the **preview** service. `prePromotionAnalysis` runs a k6 Job against the preview host; only if it passes is the rollout promotable (`autoPromotionEnabled: false` → manual promote). `scaleDownDelaySeconds` keeps the old ReplicaSet briefly for fast rollback.
+## 🧱 What's inside
 
----
+- **Argo Rollout** — blue/green with a preview ReplicaSet and manual (or automated) promotion.
+- **k6 AnalysisTemplate** — a pre-promotion smoke test that gates the cutover, targeting the internal preview Service.
+- **Services** — active (blue), preview (green), and a stable Service for Deployment mode.
+- **Ingress** — an NGINX ingress plus a dedicated preview ingress, with CORS and rate-limiting annotations.
+- **HPA / PDB** — horizontal scaling (targets the Rollout) and a disruption budget.
+- **ConfigMap / Secret** — runtime config via `envFrom` (the Secret is referenced `optional`, never committed).
+- **ArgoCD Application** — `application.yaml`, with `ignoreDifferences` for the rollout-managed Service selectors.
 
-## Config Essentials
+## ⚙️ Configuration
+
+| Value | Default | Purpose |
+|-------|---------|---------|
+| `controller.type` | `rollout` | `rollout` for Argo Rollouts (blue/green), `deployment` for a plain Deployment. |
+| `replicaCount` | `2` | Desired pod count for the active stack. |
+| `image.repository` / `image.tag` | `nginxinc/nginx-unprivileged` / `1.27-alpine` | Runnable public default (non-root, `:8080`). Swap for your app. |
+| `service.activeName` / `service.previewName` | `tobrazo-app` / `tobrazo-app-preview` | Active (blue) and preview (green) Service names. |
+| `service.port` / `service.targetPort` | `80` / `8080` | Service port and container target port. |
+| `config.*` | see `values.yaml` | Rendered into a ConfigMap consumed via `envFrom`. |
+| `secret.name` / `secret.create` | `app-secrets` / `false` | Name of a Secret with sensitive env (created out-of-band by default; no secret in git). |
+| `hpa.enabled` | `true` | HorizontalPodAutoscaler targeting the Rollout (2→4 replicas @ 80% CPU). |
+| `pdb.enabled` | `true` | PodDisruptionBudget (`minAvailable: 50%`). |
+| `podSecurityContextEnabled` / `containerSecurityContextEnabled` | `false` | Opt-in non-root + dropped-capabilities hardening. |
+| `ingress.enabled` / `ingress.annotations` | `true` | Preview/main ingress with CORS, rate limiting, TLS via cert-manager. |
+| `domains.main` / `domains.preview` | `*.example.com` | Ingress hostnames (placeholder domains). |
+
+<details>
+<summary><b>Config essentials (values.yaml excerpt)</b></summary>
 
 ```yaml
 # values.yaml (default = blue/green Rollout)
@@ -106,32 +115,54 @@ controller:
   type: rollout            # or "deployment" for a plain Deployment
 
 image:
-  repository: ghcr.io/tobrazo/tobrazo-app
-  tag: "1.0.0"
+  repository: nginxinc/nginx-unprivileged   # runnable public default
+  tag: "1.27-alpine"
 
-domains:
-  main: tobrazo-app.example.com
-  preview: tobrazo-app-preview.example.com
+service:
+  activeName: tobrazo-app
+  previewName: tobrazo-app-preview
+  port: 80
+  targetPort: 8080
 
-config:                     # rendered into a ConfigMap (envFrom)
+config:                    # rendered into a ConfigMap (envFrom)
   NODE_ENV: production
   REDIS_HOSTS:
     - redis://redis-cluster-0.redis-cluster.redis.svc.cluster.local:6379
 ```
+</details>
 
-| Parameter | Description |
-|-----------|-------------|
-| `controller.type` | `rollout` for Argo Rollouts (blue/green), `deployment` for a standard Deployment |
-| `service.name` / `service.previewName` | Active (blue) and preview (green) Service names |
-| `config.*` | Rendered into a ConfigMap consumed via `envFrom` |
-| `secret.name` | Name of a Secret with sensitive env (created out-of-band; not in the chart) |
-| `hpa.enabled` | HorizontalPodAutoscaler targeting the Rollout |
-| `pdb.enabled` | PodDisruptionBudget |
-| `ingress.annotations` | CORS, rate limiting, real-IP headers |
+<details>
+<summary><b>Chart structure</b></summary>
 
----
+```text
+argo-rollouts-blue-green/
+├── Chart.yaml
+├── values.yaml                # default: blue/green Rollout
+├── values-deployment.yaml     # overlay: plain Deployment mode
+├── application.yaml           # ArgoCD Application
+├── files/k6s/smoke.js         # k6 smoke test (targets PREVIEW_URL)
+└── templates/
+    ├── _helpers.tpl
+    ├── rollout.yaml            # Argo Rollout (controller.type=rollout)
+    ├── deployment.yaml         # Deployment (controller.type=deployment)
+    ├── service-active.yaml     # active/blue Service
+    ├── service-preview.yaml    # preview/green Service
+    ├── service.yaml            # stable Service (deployment mode)
+    ├── ingress.yaml
+    ├── ingress-preview.yaml
+    ├── configmap.yaml
+    ├── configmap-k6s.yaml      # mounts smoke.js for the analysis Job
+    ├── analysis-templates.yaml # k6 AnalysisTemplate (pre-promotion gate)
+    ├── secret.yaml             # optional, disabled by default
+    ├── hpa.yaml
+    └── pdb.yaml
+```
+</details>
 
-## Quick Start
+> [!NOTE]
+> The pre-promotion k6 gate targets the **in-cluster preview Service** — `http://<previewName>.<namespace>.svc.cluster.local:<port>/` — so it genuinely exercises the green stack before promotion, not a public URL.
+
+## 🚀 Quick start
 
 ```bash
 # Blue/green Rollout (default)
@@ -142,7 +173,8 @@ helm upgrade --install tobrazo-app . -n tobrazo-app --create-namespace \
   -f values-deployment.yaml
 ```
 
-**Drive the rollout:**
+Drive the rollout:
+
 ```bash
 kubectl argo rollouts get rollout tobrazo-app -n tobrazo-app
 kubectl argo rollouts promote tobrazo-app -n tobrazo-app
@@ -151,39 +183,7 @@ kubectl argo rollouts abort   tobrazo-app -n tobrazo-app
 
 **GitOps:** apply `application.yaml` to let ArgoCD manage it (repoURL points at `github.com/tobrazo/devops`, path `helm-charts/argo-rollouts-blue-green`).
 
----
-
-## Chart Structure
-
-```text
-argo-rollouts-blue-green/
-├── Chart.yaml
-├── values.yaml                # default: blue/green Rollout
-├── values-deployment.yaml     # overlay: plain Deployment mode
-├── application.yaml           # ArgoCD Application
-├── files/k6s/smoke.js         # k6 smoke test (target via -e PREVIEW_URL)
-└── templates/
-    ├── _helpers.tpl
-    ├── rollout.yaml           # Argo Rollout (controller.type=rollout)
-    ├── deployment.yaml        # Deployment (controller.type=deployment)
-    ├── service-active.yaml    # active/blue Service
-    ├── service-preview.yaml   # preview/green Service
-    ├── service.yaml           # stable Service (deployment mode)
-    ├── ingress.yaml
-    ├── ingress-preview.yaml
-    ├── configmap.yaml
-    ├── configmap-k6s.yaml     # mounts smoke.js for the analysis Job
-    ├── analysis-templates.yaml# k6 AnalysisTemplate (pre-promotion gate)
-    ├── secret.yaml            # optional, disabled by default
-    ├── hpa.yaml
-    └── pdb.yaml
-```
-
-The default image is a **runnable public** one (`nginxinc/nginx-unprivileged`, non-root, listens on 8080) so `helm install` works out of the box — swap `image.*` for your own app. The pre-promotion k6 gate targets the in-cluster **preview Service** (`http://<previewService>.<ns>.svc:80/`), so it actually exercises the green stack before promotion.
-
----
-
-## Local Validation
+## ✅ Validation
 
 ```bash
 helm lint .
@@ -193,4 +193,5 @@ helm template tobrazo-app . | kube-score score -
 helm template tobrazo-app . | kube-linter lint -
 ```
 
-> **Note:** rendering the Rollout/AnalysisTemplate requires the Argo Rollouts CRDs installed in the cluster at apply time (the `gitops/` platform in this repo installs them).
+> [!IMPORTANT]
+> Rendering the `Rollout` / `AnalysisTemplate` requires the Argo Rollouts CRDs installed in the cluster at apply time. The `gitops/` platform in this repo installs them (`argo-rollouts` at sync-wave `-5`).

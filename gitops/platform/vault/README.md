@@ -1,28 +1,41 @@
-## HashiCorp Vault (HA, Raft) via ArgoCD
+<div align="center">
 
-**Install is GitOps; init / unseal / configure is a manual runbook** — Vault's
-unseal keys and root token must never live in Git, so those steps are done by
-hand (below), not by an ArgoCD Job.
+# 🔐 HashiCorp Vault (HA, Raft)
 
-### Runbook
-1. Vault is installed by the platform root — `clusters/prod/apps/platform/vault.yaml`
-   (chart `hashicorp/vault`, HA + Raft). No manual apply needed.
+**Installed via ArgoCD — init / unseal / configure is a manual, by-hand runbook.**
 
-2. Waiting for pods to become ready
+![Vault](https://img.shields.io/badge/Vault-HA_·_Raft-FFEC6E?style=flat-square&logo=vault&logoColor=black)
+![ArgoCD](https://img.shields.io/badge/ArgoCD-install-EF7B4D?style=flat-square&logo=argo&logoColor=white)
+
+</div>
+
+---
+
+> [!IMPORTANT]
+> **Install is GitOps; init / unseal / configure is a manual runbook.** Vault's unseal keys and root token must never live in Git, so those steps are done by hand (below), not by an ArgoCD Job.
+
+## 🧪 Runbook
+
+**1.** Vault is installed by the platform root — `clusters/prod/apps/platform/vault.yaml` (chart `hashicorp/vault`, HA + Raft). No manual apply needed.
+
+**2.** Waiting for pods to become ready
+
 ```bash
 kubectl get pods -n vault -w
 ```
 
-3. Initializing and Unsealing Vault
+**3.** Initializing and Unsealing Vault
+
 Initialization (only on vault-0):
 
 ```bash
 kubectl exec -n vault vault-0 -- vault operator init
 ```
 
-#### SAVE THE OUTPUT! It contains 5 unseal keys and the root token.
+> [!CAUTION]
+> **SAVE THE OUTPUT!** It contains 5 unseal keys and the root token.
 
-##### Unseal vault-0 (use any 3 of the 5 keys):
+Unseal vault-0 (use any 3 of the 5 keys):
 
 ```bash
 kubectl exec -n vault vault-0 -- vault operator unseal [KEY1]
@@ -30,14 +43,16 @@ kubectl exec -n vault vault-0 -- vault operator unseal [KEY2]
 kubectl exec -n vault vault-0 -- vault operator unseal [KEY3]
 ```
 
-##### Check the status of vault-0:
+Check the status of vault-0:
 
 ```bash
 kubectl exec -n vault vault-0 -- vault status
 ```
+
 It should show Sealed: false and HA Mode: active.
 
-4. Joining and Unsealing the Remaining Nodes
+**4.** Joining and Unsealing the Remaining Nodes
+
 Join vault-1 and vault-2 to the cluster:
 
 ```bash
@@ -57,15 +72,18 @@ kubectl exec -n vault vault-2 -- vault operator unseal [KEY2]
 kubectl exec -n vault vault-2 -- vault operator unseal [KEY3]
 ```
 
-5. Cluster verification
+**5.** Cluster verification
+
 ```bash
 kubectl exec -n vault vault-0 -- vault status
 kubectl exec -n vault vault-1 -- vault status
 kubectl exec -n vault vault-2 -- vault status
 ```
+
 All nodes should show Sealed: false.
 
-6. Configure Vault (with your root token from step 3)
+**6.** Configure Vault (with your root token from step 3)
+
 Enable the KV engine + Kubernetes auth and write a policy/role, e.g.:
 
 ```bash
@@ -84,9 +102,10 @@ EOF
     policies=myapp-reader ttl=24h
 '
 ```
+
 See `08-vault-rbac.yaml` / `ClusterRoleTokenReview.yaml` for the token-review RBAC the Kubernetes auth method needs, and `test-app.yaml` for an agent-injection example.
 
-7. Configuration check
+**7.** Configuration check
 
 ```bash
 # Check secrets
@@ -99,8 +118,12 @@ kubectl exec -n vault vault-0 -- sh -c 'VAULT_TOKEN=[ROOT_TOKEN] vault policy li
 
 kubectl exec -n vault vault-0 -- sh -c 'VAULT_TOKEN=[ROOT_TOKEN] vault auth list'
 ```
-### Example usage in applications
-#### Deployment with secret injection
+
+## 🧩 Example usage in applications
+
+<details>
+<summary><b>Deployment with secret injection</b></summary>
+
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -125,9 +148,13 @@ spec:
         command: ["/bin/sh"]
         args: ["-c", "set -a && . /vault/secrets/db-credentials && set +a && ./start-my-app"]
 ```
+</details>
 
+## 🔐 Important notes
 
-### Important notes
-- **Unseal keys and the root token are printed once** during `vault operator init` — store them in a real secret manager, never in Git.
-- Vault runs HA with Raft; init on `vault-0`, then `raft join` + unseal `vault-1`/`vault-2`.
-- For production, prefer **auto-unseal** (a cloud KMS / transit seal) so pods recover without manual unsealing.
+> [!CAUTION]
+> **Unseal keys and the root token are printed once** during `vault operator init` — store them in a real secret manager, never in Git.
+
+> [!NOTE]
+> - Vault runs HA with Raft; init on `vault-0`, then `raft join` + unseal `vault-1` / `vault-2`.
+> - For production, prefer **auto-unseal** (a cloud KMS / transit seal) so pods recover without manual unsealing.
