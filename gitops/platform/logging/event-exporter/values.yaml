@@ -1,0 +1,24 @@
+
+global:
+  security:
+    allowInsecureImages: true
+
+image:
+  repository: opsgenie/kubernetes-event-exporter
+  tag: v0.11
+  pullPolicy: IfNotPresent
+
+
+config:
+  logLevel: info
+  logFormat: json
+  receivers:
+    - name: loki
+      loki:
+        url: http://loki.logs.svc.cluster.local:3100/loki/api/v1/push
+        streamLabels:
+          job: kubernetes-event-exporter
+  route:
+    routes:
+      - match:
+          - receiver: loki

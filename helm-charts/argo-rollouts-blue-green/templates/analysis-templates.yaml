@@ -1,0 +1,38 @@
+{{- if eq .Values.controller.type "rollout" }}
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: {{ include "app.fullname" . }}-k6
+  namespace: {{ .Release.Namespace }}
+spec:
+  metrics:
+    - name: k6-smoke-test
+      count: 1
+      # failureLimit: 0 → a single failed/errored measurement fails the metric
+      # (with count:1 anything > 0 could never trip). Job provider success is the
+      # container exit code, so no successCondition is needed.
+      failureLimit: 0
+      provider:
+        job:
+          spec:
+            backoffLimit: 0
+            template:
+              spec:
+                restartPolicy: Never
+                containers:
+                  - name: k6
+                    image: grafana/k6:0.52.0
+                    command: ["k6", "run", "/scripts/smoke.js"]
+                    # Test the in-cluster preview (green) Service, not a public URL.
+                    env:
+                      - name: PREVIEW_URL
+                        value: "http://{{ .Values.service.previewName }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}{{ .Values.probes.path }}"
+                    volumeMounts:
+                      - name: k6-scripts
+                        mountPath: /scripts
+                volumes:
+                  - name: k6-scripts
+                    configMap:
+                      name: {{ include "app.fullname" . }}-config-k6
+
+  {{- end }}

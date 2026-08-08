@@ -1,0 +1,25 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: otel-additional-resources
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "15"  # after operator and tempo
+    environment: prod
+spec:
+  project: platform
+  destination:
+    namespace: monitoring
+    server: https://kubernetes.default.svc
+  
+  source:
+    repoURL: https://github.com/tobrazo/devops
+    targetRevision: main
+    path: gitops/platform/otel/additional-resources
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

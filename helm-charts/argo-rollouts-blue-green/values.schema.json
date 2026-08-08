@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "tobrazo-app (blue/green) values",
+  "type": "object",
+  "required": ["controller", "image", "service"],
+  "properties": {
+    "controller": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "type": "string", "enum": ["rollout", "deployment"] }
+      }
+    },
+    "replicaCount": { "type": "integer", "minimum": 1 },
+    "image": {
+      "type": "object",
+      "required": ["repository", "tag"],
+      "properties": {
+        "repository": { "type": "string" },
+        "tag": { "type": "string" },
+        "pullPolicy": { "type": "string", "enum": ["Always", "IfNotPresent", "Never"] }
+      }
+    },
+    "imagePullSecrets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": { "name": { "type": "string" } }
+      }
+    },
+    "service": {
+      "type": "object",
+      "required": ["activeName", "previewName"],
+      "properties": {
+        "activeName": { "type": "string" },
+        "previewName": { "type": "string" },
+        "port": { "type": "integer" },
+        "targetPort": { "type": "integer" }
+      }
+    },
+    "hpa": {
+      "type": "object",
+      "properties": { "enabled": { "type": "boolean" } }
+    },
+    "pdb": {
+      "type": "object",
+      "properties": { "enabled": { "type": "boolean" } }
+    },
+    "ingress": {
+      "type": "object",
+      "properties": { "enabled": { "type": "boolean" } }
+    }
+  }
+}

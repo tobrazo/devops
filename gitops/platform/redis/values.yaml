@@ -1,0 +1,29 @@
+# Values for the Bitnami "redis" chart (platform cache, e.g. for Centrifugo).
+# Referenced by clusters/*/apps/platform/redis.yaml via $values.
+architecture: replication
+
+auth:
+  # In-cluster only. For real deployments enable auth and use an existingSecret.
+  enabled: false
+
+master:
+  persistence:
+    enabled: true
+    size: 4Gi
+    # storageClassName: ""   # empty = cluster default
+
+replica:
+  replicaCount: 1
+  persistence:
+    enabled: true
+    size: 4Gi
+
+metrics:
+  enabled: true
+  # Let the chart create the ServiceMonitor with selectors that actually match
+  # the bitnami redis metrics service (the custom one in monitoring/manifests
+  # was removed — it selected `app: redis-cluster` which never existed here).
+  serviceMonitor:
+    enabled: true
+    labels:
+      release: kube-prometheus-stack

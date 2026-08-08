@@ -1,0 +1,115 @@
+# Production overlay example: HA sizing, PDB on, larger memory budget.
+# Usage: helm upgrade --install redis . -n redis -f values-production.yaml
+replicaCount: 6
+
+affinity:
+  enabled: false
+  # type: r5.large
+
+# Optionally pin the StatefulSet to a specific zone/topology.
+# Left empty so the chart stays cloud-agnostic — set your own labels if needed.
+# nodeSelector:
+#   topology.kubernetes.io/zone: <your-zone>
+
+updateStrategy:
+  type: OnDelete
+
+terminationGracePeriodSeconds: 60
+
+image:
+  repository: redis/redis-stack
+  tag: 7.4.0-v7
+  pullPolicy: IfNotPresent
+
+service:
+  port: 6379
+  gossipPort: 16379
+  headless: redis-cluster
+
+storage:
+  size: 10Gi
+  # Set to a retained/production StorageClass in your cluster.
+  className: ""
+
+resources:
+  requests:
+    memory: 4Gi
+    cpu: 1500m
+  limits:
+    memory: 10Gi
+    cpu: 2500m
+
+readinessProbe:
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+livenessProbe:
+  initialDelaySeconds: 15
+  periodSeconds: 20
+  timeoutSeconds: 5
+  failureThreshold: 5
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 5
+
+fixIP:
+  enabled: true
+  maxWaitSeconds: 180
+  retryIntervalSeconds: 2
+
+redisFixCronjob:
+  enabled: false
+  image:
+    repository: bitnami/kubectl
+    tag: "1.31"
+    pullPolicy: IfNotPresent
+
+redisExporter:
+  enabled: true
+  image: oliver006/redis_exporter:v1.54.0
+  port: 9121
+  env:
+    - name: REDIS_ADDR
+      value: redis://localhost:6379
+
+#############################################
+#           REDIS CONFIG
+#############################################
+redisConfig:
+  # --- MEMORY ---
+  maxmemory: 7000mb
+  maxmemoryPolicy: allkeys-lru
+  maxmemorySamples: 7
+
+  # --- IO THREADS ---
+  ioThreads: 4
+  ioThreadsDoReads: "yes"
+
+  # --- LATENCY ---
+  latencyMonitorThreshold: 100
+
+  # --- SNAPSHOTS ---
+  save:
+    - "900 1000"
+    - "300 10000"
+
+  # --- AOF (everysec) ---
+  appendonly: "yes"
+  appendfsync: "everysec"
+  aofUseRdbPreamble: "yes"
+  noAppendfsyncOnRewrite: "yes"
+
+  # --- REPLICATION ---
+  replDisklessSync: "yes"
+  replDisklessSyncDelay: 5
+
+  # --- Lazy free ---
+  lazyfreeLazyEviction: "yes"
+
+  # --- RediSearch tuning ---
+  search-bgsave-threshold-hits: 0
+  search-bgsave-threshold-values: 0
+  search-alias-gc-stats: "no"

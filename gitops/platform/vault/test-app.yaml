@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-vault-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: test-vault-app
+  template:
+    metadata:
+      annotations:
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/role: "myapp-role"
+        vault.hashicorp.com/agent-inject-secret-db-credentials: "secret/data/myapp/database"
+        vault.hashicorp.com/agent-inject-template-db-credentials: |
+          {{- with secret "secret/data/myapp/database" -}}
+          DB_USERNAME={{ .Data.data.username }}
+          DB_PASSWORD={{ .Data.data.password }}
+          {{- end }}
+      labels:
+        app: test-vault-app
+    spec:
+      containers:
+      - name: app
+        image: nginx:alpine
+        command: ["/bin/sh"]
+        args: ["-c", "set -a && . /vault/secrets/db-credentials && set +a && echo DB_USERNAME=$DB_USERNAME && echo DB_PASSWORD=$DB_PASSWORD && sleep 3600"]

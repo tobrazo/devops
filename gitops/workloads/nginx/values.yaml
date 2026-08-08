@@ -1,0 +1,37 @@
+# Example nginx workload — Argo Rollouts blue/green.
+replicaCount: 2
+
+image:
+  repository: nginx
+  tag: "1.27-alpine"
+  pullPolicy: IfNotPresent
+
+service:
+  activeName: nginx-active
+  previewName: nginx-preview
+  port: 80
+  targetPort: 80
+
+rollout:
+  # Manual promotion: the new (green) version stays on the preview service
+  # until you run `kubectl argo rollouts promote nginx`.
+  autoPromotionEnabled: false
+  scaleDownDelaySeconds: 30
+
+pdb:
+  enabled: false
+  minAvailable: 1
+
+resources:
+  requests:
+    cpu: 25m
+    memory: 32Mi
+  limits:
+    cpu: 100m
+    memory: 128Mi
+
+ingress:
+  enabled: false
+  className: nginx
+  host: nginx.example.com
+  annotations: {}

@@ -1,0 +1,163 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-fix-ip-script
+  namespace: {{ .Release.Namespace }}
+data:
+  fix-ip.sh: |
+    #!/bin/bash
+
+    set -euo pipefail
+
+    REDIS_CLI="redis-cli"
+    NODE_CONF="/data/nodes.conf"
+    CURRENT_IP=$(hostname -i | awk '{print $1}')
+    EXPECTED_NODES=${EXPECTED_NODES:-${REDIS_EXPECTED_NODES:-6}}
+    RESTART=true
+    MAX_WAIT=180
+    SLEEP_SECONDS=2
+
+    usage() {
+      echo "Usage: $0 [--no-restart] [--restart] [--max-wait <seconds>] [--sleep <seconds>] [--expected-nodes <count>]"
+      echo "  --no-restart        Update nodes.conf only, without restarting Redis"
+      echo "  --restart           Restart Redis after updating nodes.conf (default)"
+      echo "  --max-wait seconds  Maximum time to wait for Redis readiness (default: $MAX_WAIT)"
+      echo "  --sleep seconds     Interval between readiness checks (default: $SLEEP_SECONDS)"
+      echo "  --expected-nodes n  Expected number of nodes in the cluster (default: $EXPECTED_NODES)"
+    }
+
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --no-restart)
+          RESTART=false
+          ;;
+        --restart)
+          RESTART=true
+          ;;
+        --max-wait)
+          MAX_WAIT="$2"
+          shift
+          ;;
+        --sleep|--retry-interval)
+          SLEEP_SECONDS="$2"
+          shift
+          ;;
+        --expected-nodes)
+          EXPECTED_NODES="$2"
+          shift
+          ;;
+        --help|-h)
+          usage
+          exit 0
+          ;;
+        *)
+          echo "[WARN] Unknown option: $1" >&2
+          ;;
+      esac
+      shift
+    done
+
+    wait_for_redis() {
+      local waited=0
+      while (( waited < MAX_WAIT )); do
+        local pong
+        pong=$($REDIS_CLI ping 2>&1 || true)
+        case "$pong" in
+          PONG)
+            return 0
+            ;;
+          LOADING*)
+            echo "[INFO] Redis is still loading data (LOADING)..."
+            ;;
+          *)
+            echo "[INFO] Redis ping returned: $pong"
+            ;;
+        esac
+        sleep "$SLEEP_SECONDS"
+        waited=$((waited + SLEEP_SECONDS))
+      done
+      echo "[ERROR] Redis did not return PONG within ${MAX_WAIT}s"
+      return 1
+    }
+
+    wait_for_cluster() {
+      local waited=0
+      while (( waited < MAX_WAIT )); do
+        local info
+        info=$($REDIS_CLI cluster info 2>&1 || true)
+        if grep -q "cluster_state:ok" <<<"$info"; then
+          return 0
+        fi
+        if [[ "$info" == LOADING* ]]; then
+          echo "[INFO] Cluster is still loading..."
+        else
+          echo "[INFO] cluster info: $info"
+        fi
+        sleep "$SLEEP_SECONDS"
+        waited=$((waited + SLEEP_SECONDS))
+      done
+      echo "[WARN] Cluster did not reach state=ok within ${MAX_WAIT}s"
+      return 1
+    }
+
+    echo "[INFO] Waiting for Redis to become ready..."
+    if ! wait_for_redis; then
+      exit 1
+    fi
+
+    wait_for_cluster || true
+
+    CLUSTER_NODES_OUTPUT=$($REDIS_CLI cluster nodes 2>/dev/null || true)
+    if [[ -z "$CLUSTER_NODES_OUTPUT" ]]; then
+      echo "[WARN] Unable to retrieve cluster nodes; cluster not initialised yet — skipping IP reconciliation"
+      exit 0
+    fi
+
+    NODE_COUNT=$(echo "$CLUSTER_NODES_OUTPUT" | wc -l | tr -d ' ')
+    if [[ -n "$NODE_COUNT" && "$NODE_COUNT" -lt "$EXPECTED_NODES" ]]; then
+      echo "[WARN] Found $NODE_COUNT nodes, expected >= $EXPECTED_NODES"
+    fi
+
+    MY_LINE=$(echo "$CLUSTER_NODES_OUTPUT" | grep myself || true)
+    if [[ -z "$MY_LINE" ]]; then
+      echo "[WARN] Could not find 'myself' entry in cluster nodes output — postponing"
+      exit 0
+    fi
+
+    MY_CLUSTER_IP=$(echo "$MY_LINE" | awk '{print $2}' | cut -d':' -f1)
+
+    echo "[INFO] Cluster IP (myself entry): $MY_CLUSTER_IP"
+    echo "[INFO] Pod IP from hostname -i:   $CURRENT_IP"
+
+    if [[ "$MY_CLUSTER_IP" == "$CURRENT_IP" ]]; then
+      echo "[OK] IP addresses are consistent — nothing to do"
+      exit 0
+    fi
+
+    echo "[INFO] Detected IP change, updating nodes.conf"
+    OLD_IP=$(grep myself "$NODE_CONF" | awk '{print $2}' | cut -d':' -f1 || true)
+    if [[ -z "$OLD_IP" ]]; then
+      echo "[WARN] Unable to read IP from nodes.conf, using cluster IP"
+      OLD_IP="$MY_CLUSTER_IP"
+    fi
+
+    if [[ ! -w "$NODE_CONF" ]]; then
+      echo "[ERROR] File $NODE_CONF is not writable"
+      exit 1
+    fi
+
+    # Rewrite ONLY the 'myself' line's address, with the old IP's regex metachars
+    # escaped, so a peer row that happens to hold a recycled IP can never be
+    # corrupted (no global /g, no unescaped dots — the two bugs of the naive sed).
+    ESC_OLD=$(printf '%s' "$OLD_IP" | sed 's/[].[^$*\\/]/\\&/g')
+    sed -i "/myself/ s/${ESC_OLD}/${CURRENT_IP}/" "$NODE_CONF"
+    echo "[INFO] nodes.conf updated (myself line): $OLD_IP → $CURRENT_IP"
+
+    if [[ "$RESTART" == true ]]; then
+      echo "[INFO] Restarting Redis to apply nodes.conf changes"
+      $REDIS_CLI shutdown nosave || true
+    else
+      echo "[INFO] Restart skipped (--no-restart). Restart manually if needed."
+    fi
+
+    exit 0

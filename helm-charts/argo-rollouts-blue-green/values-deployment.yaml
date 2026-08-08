@@ -1,0 +1,21 @@
+# Plain-Deployment overlay (no Argo Rollouts).
+# Renders a standard Deployment + single Service instead of the blueGreen Rollout.
+# Usage: helm upgrade --install tobrazo-app . -n tobrazo-app -f values-deployment.yaml
+controller:
+  type: deployment
+
+replicaCount: 2
+
+# Inherits the runnable public image from values.yaml; override here for your app.
+
+# Node affinity for the plain Deployment (Rollout uses topologySpread instead).
+affinity: {}
+
+# HPA/PDB still apply; the rollout-only preview/analysis resources are not rendered.
+hpa:
+  enabled: false
+pdb:
+  enabled: false
+
+ingress:
+  enabled: true

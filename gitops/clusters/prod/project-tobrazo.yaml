@@ -1,0 +1,21 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: tobrazo
+  namespace: argocd
+spec:
+  description: "Application workloads (your projects deployed on top of the platform)."
+  # Workload charts live in this repo; add your own registries here if needed.
+  sourceRepos:
+    - https://github.com/tobrazo/devops
+  destinations:
+    - namespace: '*'
+      server: https://kubernetes.default.svc
+  # Workloads are namespaced (Rollout, Service, Ingress, PDB, HPA). The only
+  # cluster-scoped resource they need is their own Namespace — least privilege.
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'

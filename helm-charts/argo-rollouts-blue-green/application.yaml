@@ -1,0 +1,51 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tobrazo-app
+  namespace: argocd
+  annotations:
+    # ArgoCD Notifications (wire your own receiver; left empty by default).
+    notifications.argoproj.io/subscribe.on-sync-failed.slack_webhook: ""
+    notifications.argoproj.io/subscribe.on-health-degraded.slack_webhook: ""
+    notifications.argoproj.io/subscribe.on-deployed.slack_webhook: ""
+    argocd.argoproj.io/sync-wave: "2"
+    # argocd-image-updater: auto-detect new images and write the tag back.
+    argocd-image-updater.argoproj.io/image-list: tobrazo-app=ghcr.io/tobrazo/tobrazo-app
+    argocd-image-updater.argoproj.io/tobrazo-app.update-strategy: newest-build
+    argocd-image-updater.argoproj.io/tobrazo-app.pull-secret: pullsecret:argocd/ghcr-creds
+    argocd-image-updater.argoproj.io/write-back-method: argocd
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: tobrazo-app
+  source:
+    repoURL: https://github.com/tobrazo/devops
+    path: helm-charts/argo-rollouts-blue-green
+    targetRevision: main
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+
+  # The Rollout controller injects the pod-hash into the Service selectors and
+  # the HPA owns Rollout replicas — ignore those so ArgoCD does not fight them.
+  ignoreDifferences:
+    - kind: Service
+      name: tobrazo-app
+      namespace: tobrazo-app
+      jsonPointers:
+        - /spec/selector
+    - kind: Service
+      name: tobrazo-app-preview
+      namespace: tobrazo-app
+      jsonPointers:
+        - /spec/selector
+    - kind: Rollout
+      group: argoproj.io
+      name: tobrazo-app
+      namespace: tobrazo-app
+      jsonPointers:
+        - /spec/replicas

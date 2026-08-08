@@ -1,0 +1,130 @@
+# Default values for tobrazo-app (Argo Rollouts blue/green example).
+#
+# controller.type:
+#   rollout    -> Argo Rollout with blueGreen strategy (active/preview services,
+#                 pre-promotion k6 analysis, preview ingress). This is the default.
+#   deployment -> plain Deployment + single Service (see values-deployment.yaml).
+controller:
+  type: rollout
+
+replicaCount: 2
+revisionHistoryLimit: 2
+
+# Runnable public default: non-root, listens on 8080. Swap for your own image.
+image:
+  repository: nginxinc/nginx-unprivileged
+  tag: "1.27-alpine"
+  pullPolicy: IfNotPresent
+
+# Pull secret(s) for a private registry (e.g. GHCR). Empty for public images.
+imagePullSecrets: []
+
+podAnnotations: {}
+  # e.g. instrumentation.opentelemetry.io/inject-nodejs: "true"
+
+# Hardening (opt-in). Enable in production overlays.
+podSecurityContextEnabled: false
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContextEnabled: false
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+
+# Application config Secret (envFrom, optional). Create it out-of-band, or set
+# create=true and pass secret.values (kept disabled so no secret lives in git).
+secret:
+  name: app-secrets
+  create: false
+  values: {}   # { KEY: value } — only used when create: true
+
+service:
+  activeName: tobrazo-app
+  previewName: tobrazo-app-preview
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+pdb:
+  enabled: true
+  minAvailable: "50%"
+
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 80
+
+# Node affinity for the plain Deployment mode (the Rollout uses topologySpread).
+affinity: {}
+
+resources:
+  limits:
+    cpu: "1000m"
+    memory: "1Gi"
+  requests:
+    cpu: "250m"
+    memory: "256Mi"
+
+probes:
+  enabled: true
+  path: /
+  port: 8080
+  livenessProbe:
+    initialDelaySeconds: 15
+    periodSeconds: 15
+    timeoutSeconds: 2
+    failureThreshold: 3
+  readinessProbe:
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 2
+    failureThreshold: 2
+
+domains:
+  main: tobrazo-app.example.com
+  preview: tobrazo-app-preview.example.com
+  frontend: app.example.com
+  publicApi: api.example.com
+
+ingress:
+  enabled: true
+  className: "nginx"
+  path: /
+  pathType: Prefix
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-dns
+    external-dns.alpha.kubernetes.io/hostname: tobrazo-app.example.com
+    nginx.ingress.kubernetes.io/enable-cors: 'true'
+    nginx.ingress.kubernetes.io/cors-allow-credentials: 'true'
+    nginx.ingress.kubernetes.io/cors-allow-headers: Content-Type,Authorization
+    nginx.ingress.kubernetes.io/cors-allow-methods: GET, POST, PUT, DELETE, OPTIONS, PATCH
+    nginx.ingress.kubernetes.io/cors-allow-origin: '*'
+    nginx.ingress.kubernetes.io/proxy-body-size: 6m
+    nginx.ingress.kubernetes.io/limit-rps: '50'
+    nginx.ingress.kubernetes.io/limit-connections: '100'
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: '10'
+  tls:
+    enabled: true
+    secretName: tobrazo-app-tls
+    hosts:
+      - tobrazo-app.example.com
+      - tobrazo-app-preview.example.com
+
+# Rendered into the app ConfigMap (envFrom). Generic placeholders only.
+config:
+  NODE_ENV: production
+  REDIS_HOSTS:
+    - redis://redis-cluster-0.redis-cluster.redis.svc.cluster.local:6379
+    - redis://redis-cluster-1.redis-cluster.redis.svc.cluster.local:6379
+    - redis://redis-cluster-2.redis-cluster.redis.svc.cluster.local:6379
+  REDIS_PORT: 6379

@@ -1,0 +1,20 @@
+apiVersion: opentelemetry.io/v1alpha1
+kind: Instrumentation
+metadata:
+  name: auto-instrumentation-prod
+  namespace: prod
+spec:
+  exporter:
+    endpoint: http://tracing-collector-collector.monitoring.svc.cluster.local:4318 # HTTP port 4318 gRPC port 4317
+
+  sampler:
+    type: parentbased_always_on
+
+  propagators:
+    - tracecontext
+    - baggage
+
+  nodejs:
+    env:
+      - name: OTEL_EXPORTER_OTLP_ENDPOINT
+        value: http://tracing-collector-collector.monitoring.svc.cluster.local:4318

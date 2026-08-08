@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: centrifugo-readme
+data:
+  README.md: |
+{{ (.Files.Get "README.md") | indent 4 }}

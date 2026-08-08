@@ -1,0 +1,173 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis-cluster
+  namespace: {{ .Release.Namespace }}
+spec:
+  serviceName: {{ .Values.service.headless }}
+  replicas: {{ .Values.replicaCount }}
+  updateStrategy:
+{{- if .Values.updateStrategy }}
+    type: {{ default "RollingUpdate" .Values.updateStrategy.type }}
+{{- if and .Values.updateStrategy.rollingUpdate (eq (default "RollingUpdate" .Values.updateStrategy.type) "RollingUpdate") }}
+    rollingUpdate:
+{{ toYaml .Values.updateStrategy.rollingUpdate | indent 6 }}
+{{- end }}
+{{- else }}
+    type: RollingUpdate
+{{- end }}
+  selector:
+    matchLabels:
+      app: redis-cluster
+  template:
+    metadata:
+      labels:
+        app: redis-cluster
+    spec:
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds | default 60 }}
+      {{- if .Values.securityContext.enabled }}
+      securityContext:
+        {{- toYaml .Values.securityContext.pod | nindent 8 }}
+      {{- end }}
+      affinity:
+        podAntiAffinity:
+        {{- if eq (default "soft" .Values.podAntiAffinity) "hard" }}
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: redis-cluster
+              topologyKey: kubernetes.io/hostname
+        {{- else }}
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: redis-cluster
+                topologyKey: kubernetes.io/hostname
+        {{- end }}
+        {{- if .Values.affinity.enabled }}
+        {{- if .Values.affinity.nodeAffinity }}
+        nodeAffinity: {{ toYaml .Values.affinity.nodeAffinity | nindent 10 }}
+        {{- else if .Values.affinity.type }}
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node.kubernetes.io/instance-type
+                    operator: In
+                    values:
+                      - {{ .Values.affinity.type | quote }}
+        {{- end }}
+        {{- end }}
+
+      {{- if .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+{{ toYaml .Values.topologySpreadConstraints | indent 8 }}
+      {{- end }}
+
+      {{- if .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml .Values.nodeSelector | indent 8 }}
+      {{- end }}
+
+      {{- if .Values.tolerations }}
+      tolerations:
+{{ toYaml .Values.tolerations | indent 8 }}
+      {{- end }}
+
+      containers:
+        - name: redis
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["redis-server", "/etc/redis/redis.conf"]
+          {{- if .Values.securityContext.enabled }}
+          securityContext:
+            {{- toYaml .Values.securityContext.container | nindent 12 }}
+          {{- end }}
+          ports:
+            - containerPort: {{ .Values.service.port }}
+              name: client
+            - containerPort: {{ .Values.service.gossipPort }}
+              name: gossip
+          env:
+            - name: EXPECTED_NODES
+              value: "{{ .Values.replicaCount }}"
+          {{- if and .Values.fixIP .Values.fixIP.enabled }}
+          {{- $fixIP := dict "maxWait" 180 "sleep" 2 }}
+          {{- if .Values.fixIP.maxWaitSeconds }}
+            {{- $_ := set $fixIP "maxWait" .Values.fixIP.maxWaitSeconds }}
+          {{- end }}
+          {{- if .Values.fixIP.retryIntervalSeconds }}
+            {{- $_ := set $fixIP "sleep" .Values.fixIP.retryIntervalSeconds }}
+          {{- end }}
+          lifecycle:
+            postStart:
+              exec:
+                command:
+                  - /bin/bash
+                  - -c
+                  - /opt/scripts/fix-ip.sh --max-wait {{ get $fixIP "maxWait" }} --sleep {{ get $fixIP "sleep" }}
+          {{- end }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/redis
+            - name: data
+              mountPath: /data
+            - name: redis-fix-script
+              mountPath: /opt/scripts/fix-ip.sh
+              subPath: fix-ip.sh
+              readOnly: true
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          # exec probe: confirms redis actually answers (returns PONG), and stays
+          # NotReady while LOADING — unlike a bare TCP check which passes the moment
+          # the socket binds even if the node's cluster state is broken.
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "-p", "{{ .Values.service.port }}", "ping"]
+            initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "-p", "{{ .Values.service.port }}", "ping"]
+            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
+
+        {{- if .Values.redisExporter.enabled }}
+        - name: redis-exporter
+          image: {{ .Values.redisExporter.image }}
+          {{- if .Values.securityContext.enabled }}
+          securityContext:
+            {{- toYaml .Values.securityContext.container | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.redisExporter.port }}
+          env:
+            {{- toYaml .Values.redisExporter.env | nindent 12 }}
+          resources:
+            {{- toYaml .Values.redisExporter.resources | nindent 12 }}
+        {{- end }}
+
+      volumes:
+        - name: config
+          configMap:
+            name: redis-config
+        - name: redis-fix-script
+          configMap:
+            name: redis-fix-ip-script
+            defaultMode: 0755
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: {{ .Values.storage.className }}
+        resources:
+          requests:
+            storage: {{ .Values.storage.size }}

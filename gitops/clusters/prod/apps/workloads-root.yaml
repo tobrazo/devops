@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: workloads-root
+  namespace: argocd
+spec:
+  project: tobrazo
+  source:
+    repoURL: https://github.com/tobrazo/devops
+    targetRevision: main
+    path: gitops/clusters/prod/apps/workloads
+    directory:
+      recurse: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
