@@ -1,0 +1,22 @@
+{{ .Chart.Name }} "{{ .Release.Name }}" deployed to namespace "{{ .Release.Namespace }}" ({{ .Values.controller.type }} mode).
+{{ if eq .Values.controller.type "rollout" }}
+Blue/green rollout:
+  kubectl argo rollouts get rollout {{ include "app.fullname" . }} -n {{ .Release.Namespace }} --watch
+  kubectl argo rollouts promote {{ include "app.fullname" . }} -n {{ .Release.Namespace }}
+  kubectl argo rollouts abort   {{ include "app.fullname" . }} -n {{ .Release.Namespace }}
+
+  Active (blue)  service: {{ .Values.service.activeName }}
+  Preview (green) service: {{ .Values.service.previewName }}
+{{- if .Values.ingress.enabled }}
+  Preview URL: https://{{ .Values.domains.preview }}
+{{- end }}
+
+Requires the Argo Rollouts controller + CRDs in the cluster (installed by the gitops/ platform in this repo).
+{{- else }}
+Standard Deployment:
+  kubectl get deploy,pods -n {{ .Release.Namespace }} -l app={{ include "app.fullname" . }}
+{{- end }}
+{{ if not .Values.secret.create }}
+NOTE: this chart references a Secret named "{{ .Values.secret.name }}" via envFrom but does not create it.
+Create it in namespace "{{ .Release.Namespace }}" before the app can start.
+{{- end }}

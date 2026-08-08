@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "app.fullname" . }}-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ include "app.fullname" . }}
+data:
+  APP_NAMESPACE: {{ .Release.Namespace }}
+  API_BASE_URL: "{{ include "app.publicApiUrl" . }}"
+  SERVER_BASE_URL: "{{ include "app.serverUrl" . }}"
+  FRONTEND_BASE_URL: "{{ include "app.frontendUrl" . }}"
+  {{- if .Values.config.REDIS_HOSTS }}
+  REDIS_HOST: {{ .Values.config.REDIS_HOSTS | join "," | quote }}
+  {{- end }}
+
+  {{- range $key, $val := .Values.config }}
+  {{- if and (ne $key "REDIS_HOSTS") (not (kindIs "invalid" $val)) }}
+  {{ $key }}: {{ $val | quote }}
+  {{- end }}
+  {{- end }}

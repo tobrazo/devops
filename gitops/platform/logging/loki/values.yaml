@@ -1,0 +1,192 @@
+# Disable unused components (saves resources)
+kubeControllerManager:
+  enabled: false
+
+kubeScheduler:
+  enabled: false
+
+prometheusOperator:
+  enabled: false
+
+grafana:
+  enabled: false
+
+prometheus:
+  enabled: false
+
+# -----------------------------------
+# LOKI CONFIGURATION
+# -----------------------------------
+loki:
+  enabled: true
+  replicas: 1
+
+  # Persistent storage for log chunks and WAL
+  persistence:
+    enabled: true
+    size: 50Gi
+    storageClassName: ""  # cluster default; set your StorageClass
+
+  podLabels:
+    app: loki
+
+  serviceAccount:
+    create: true
+    name: loki
+
+  config:
+    auth_enabled: false
+
+    server:
+      grpc_server_max_recv_msg_size: 8388608
+      grpc_server_max_send_msg_size: 8388608
+
+    # Single-node ingester ring
+    memberlist:
+      join_members: []
+
+    ingester:
+      lifecycler:
+        ring:
+          kvstore:
+            store: inmemory
+          replication_factor: 1
+        final_sleep: 0s
+        join_after: 0s
+
+      # Recommended chunk lifecycle for small clusters
+      chunk_idle_period: 3m
+      max_chunk_age: 1h
+      chunk_retain_period: 30s
+
+      wal:
+        enabled: true
+
+    distributor:
+      ring:
+        kvstore:
+          store: inmemory
+
+    limits_config:
+      max_entries_limit_per_query: 500000
+      max_streams_per_user: 1000
+      max_global_streams_per_user: 2000
+      max_query_parallelism: 32
+
+    query_range:
+      split_queries_by_interval: 0
+      parallelise_shardable_queries: false
+
+    querier:
+      max_concurrent: 2048
+
+    frontend:
+      max_outstanding_per_tenant: 4096
+      compress_responses: true
+
+  readinessProbe:
+    httpGet:
+      path: /ready
+      port: http-metrics
+    initialDelaySeconds: 60
+
+  livenessProbe:
+    httpGet:
+      path: /ready
+      port: http-metrics
+    initialDelaySeconds: 60
+
+  terminationGracePeriodSeconds: 600
+
+  securityContext:
+    runAsUser: 10001
+    runAsGroup: 10001
+    runAsNonRoot: true
+    fsGroup: 10001
+
+
+# -----------------------------------
+# PROMTAIL CONFIGURATION
+# -----------------------------------
+promtail:
+  enabled: true
+
+  config:
+    logLevel: info
+    serverPort: 3101
+
+    limits_config:
+      max_line_size: 256000 # Supports long JSON log lines
+
+    clients:
+      - url: http://loki:3100/loki/api/v1/push
+        batchsize: 3000000
+        batchwait: 5s
+
+    scrape_configs:
+
+      # ---------------------------------------------------
+      # 1) Kubernetes Events
+      # ---------------------------------------------------
+      - job_name: kubernetes-events
+        kubernetes_events:
+          role: events
+
+      # ---------------------------------------------------
+      # 2) Kubernetes Pods Logs (Main log collector)
+      # ---------------------------------------------------
+      - job_name: kubernetes-pods
+        kubernetes_sd_configs:
+          - role: pod
+
+        pipeline_stages:
+          # Parse JSON logs when possible
+          - match:
+              selector: '{container!="",filename!=""}'
+              stages:
+                - json:
+                    expressions:
+                      level: level
+                      msg: message
+                      ts: time
+                - timestamp:
+                    source: ts
+                    format: RFC3339
+                    action_on_failure: skip
+
+          # Multiline support (stack traces)
+          - multiline:
+              firstline: '^\S'
+              max_wait_time: 3s
+
+        relabel_configs:
+          # Keep only running pods
+          - source_labels: [__meta_kubernetes_pod_phase]
+            regex: Running
+            action: keep
+
+          # Extract namespace
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+
+          # Extract pod name
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+
+          # Extract container name
+          - source_labels: [__meta_kubernetes_container_name]
+            target_label: container
+
+          # Add node name
+          - source_labels: [__meta_kubernetes_node_name]
+            target_label: node
+
+          # Drop logs from init containers
+          - source_labels: [__meta_kubernetes_pod_container_init]
+            regex: "true"
+            action: drop
+
+          # Handle filesystem log location
+          - source_labels: [__meta_kubernetes_pod_uid, __meta_kubernetes_container_name]
+            target_label: __path__
+            replacement: "/var/log/pods/*$1/*.log"

@@ -1,0 +1,4 @@
+resources:
+  - otel-collector.yaml
+  - instrumentation_prod.yaml
+  # - instrumentation.yaml   # generic example Instrumentation (namespace: monitoring)

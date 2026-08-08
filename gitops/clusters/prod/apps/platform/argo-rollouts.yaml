@@ -1,0 +1,33 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argo-rollouts
+  namespace: argocd
+  annotations:
+    # Wave -5: install the controller + CRDs before any workload Rollout syncs.
+    argocd.argoproj.io/sync-wave: "-5"
+    environment: prod
+spec:
+  project: platform
+  sources:
+    - repoURL: https://argoproj.github.io/argo-helm
+      chart: argo-rollouts
+      targetRevision: 2.34.2
+      helm:
+        releaseName: argo-rollouts
+        # Let the chart install its own CRDs (Rollout, AnalysisTemplate, …).
+        valueFiles:
+          - $values/gitops/platform/argo-rollouts/values.yaml
+    - repoURL: https://github.com/tobrazo/devops
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argo-rollouts
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

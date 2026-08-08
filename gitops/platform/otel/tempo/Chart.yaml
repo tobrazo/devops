@@ -1,0 +1,10 @@
+apiVersion: v2
+name: tempo
+description: A Helm chart for Grafana Tempo in single-binary mode
+type: application
+version: 0.1.0  # local chart version
+appVersion: "2.8.0+"  # tempo version
+dependencies:
+  - name: tempo
+    version: "1.24.1"  # actual version single-binary
+    repository: "https://grafana.github.io/helm-charts"

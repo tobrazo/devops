@@ -1,0 +1,12 @@
+installCRDs: false
+controller:
+  metrics:
+    enabled: true
+    port: 8090
+    service:
+      portName: metrics
+    serviceMonitor:
+      enabled: true
+      namespace: monitoring
+      additionalLabels:
+        release: kube-prometheus-stack

@@ -1,0 +1,48 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: external-dns
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
+    environment: prod
+spec:
+  project: platform
+  # NOTE: needs the `cloudflare-external-dns-token` Secret (see
+  # platform/cert-manager-external-dns/secrets.yaml) to become healthy.
+  source:
+    repoURL: https://kubernetes-sigs.github.io/external-dns/
+    chart: external-dns
+    targetRevision: ~1.15.0
+    helm:
+      releaseName: external-dns
+      parameters:
+        - name: provider
+          value: cloudflare
+        - name: env[0].name
+          value: CF_API_TOKEN
+        - name: env[0].valueFrom.secretKeyRef.name
+          value: cloudflare-external-dns-token
+        - name: env[0].valueFrom.secretKeyRef.key
+          value: api-token
+        - name: sources[0]
+          value: service
+        - name: sources[1]
+          value: ingress
+        - name: policy
+          value: upsert-only
+        - name: registry
+          value: txt
+        - name: txtPrefix
+          value: _external-dns.
+        - name: extraArgs[0]
+          value: --cloudflare-proxied
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

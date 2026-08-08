@@ -1,0 +1,44 @@
+{{- if and (eq .Values.controller.type "rollout") .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "app.fullname" . }}-ingress-preview
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    cert-manager.io/cluster-issuer: letsencrypt-dns
+    external-dns.alpha.kubernetes.io/hostname: {{ .Values.domains.preview | quote }}
+    nginx.ingress.kubernetes.io/cors-allow-credentials: 'true'
+    nginx.ingress.kubernetes.io/cors-allow-headers: Content-Type,Authorization
+    nginx.ingress.kubernetes.io/cors-allow-methods: GET, POST, PUT, DELETE, OPTIONS, PATCH
+    nginx.ingress.kubernetes.io/cors-allow-origin: '*'
+    nginx.ingress.kubernetes.io/enable-cors: 'true'
+    nginx.ingress.kubernetes.io/forwarded-for-header: X-Forwarded-For
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: '10'
+    nginx.ingress.kubernetes.io/limit-connections: '100'
+    nginx.ingress.kubernetes.io/limit-rps: '50'
+    nginx.ingress.kubernetes.io/proxy-body-size: 6m
+    nginx.ingress.kubernetes.io/proxy-set-headers: X-Real-IP
+    nginx.ingress.kubernetes.io/real-ip-header: CF-Connecting-IP
+    nginx.ingress.kubernetes.io/use-forwarded-headers: 'true'
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    - host: {{ .Values.domains.preview | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Values.service.previewName }}
+                port:
+                  number: {{ .Values.service.port }}
+  {{- $tls := .Values.ingress.tls | default dict }}
+  {{- if and $tls.enabled $tls.secretName }}
+  tls:
+    - hosts:
+        - {{ .Values.domains.preview | quote }}
+      secretName: {{ $tls.secretName | quote }}
+  {{- end }}
+{{- end }}

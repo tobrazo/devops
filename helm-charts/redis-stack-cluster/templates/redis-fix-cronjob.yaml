@@ -1,0 +1,64 @@
+{{- $cron := .Values.redisFixCronjob }}
+{{- $cronCtx := dict "enabled" true }}
+{{- if $cron }}
+  {{- if hasKey $cron "enabled" }}
+    {{- $_ := set $cronCtx "enabled" (eq (index $cron "enabled") true) }}
+  {{- end }}
+{{- end }}
+{{- if get $cronCtx "enabled" }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: redis-ip-check
+  namespace: {{ .Release.Namespace }}
+spec:
+  schedule: "*/5 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: redis-fix-sa
+          containers:
+            - name: check
+              image: {{ printf "%s:%s" .Values.redisFixCronjob.image.repository .Values.redisFixCronjob.image.tag }}
+              imagePullPolicy: {{ .Values.redisFixCronjob.image.pullPolicy }}
+              command:
+                - /bin/bash
+                - -c
+                - |
+                  for pod in $(kubectl get pods -l app=redis-cluster -n {{ .Release.Namespace }} -o jsonpath='{.items[*].metadata.name}'); do
+                    echo "Checking $pod..."
+                    kubectl exec -n {{ .Release.Namespace }} "$pod" -- sh -c "/opt/scripts/fix-ip.sh"
+                  done
+          restartPolicy: OnFailure
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: redis-fix-sa
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: redis-fix-role
+  namespace: {{ .Release.Namespace }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/exec"]
+    verbs: ["get", "list", "create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: redis-fix-rb
+  namespace: {{ .Release.Namespace }}
+subjects:
+  - kind: ServiceAccount
+    name: redis-fix-sa
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: Role
+  name: redis-fix-role
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}

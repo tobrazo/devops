@@ -1,0 +1,19 @@
+apiVersion: v2
+name: tobrazo-app
+description: Argo Rollouts blue/green example — active/preview services, pre-promotion k6 analysis, preview ingress, HPA and PDB. Switches to a plain Deployment via controller.type.
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+icon: https://raw.githubusercontent.com/cncf/artwork/main/projects/argo/icon/color/argo-icon-color.svg
+keywords:
+  - argo-rollouts
+  - blue-green
+  - progressive-delivery
+  - argocd
+  - gitops
+home: https://github.com/tobrazo/devops
+sources:
+  - https://github.com/tobrazo/devops
+maintainers:
+  - name: tobrazo
+    url: https://github.com/tobrazo

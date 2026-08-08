@@ -1,0 +1,28 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: platform
+  namespace: argocd
+spec:
+  description: "Cluster platform components (monitoring, logging, tracing, CRDs, cert-manager, argo-rollouts, vault)."
+  # Scoped to this repo + the upstream Helm chart registries the platform pulls from.
+  sourceRepos:
+    - https://github.com/tobrazo/devops
+    - https://prometheus-community.github.io/helm-charts
+    - https://grafana.github.io/helm-charts
+    - https://open-telemetry.github.io/opentelemetry-helm-charts
+    - https://argoproj.github.io/argo-helm
+    - https://charts.jetstack.io
+    - https://charts.bitnami.com/bitnami
+    - https://kubernetes-sigs.github.io/external-dns/
+    - https://helm.releases.hashicorp.com
+  destinations:
+    - namespace: '*'
+      server: https://kubernetes.default.svc
+  # Platform installs CRDs and other cluster-scoped resources.
+  clusterResourceWhitelist:
+    - group: '*'
+      kind: '*'
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'

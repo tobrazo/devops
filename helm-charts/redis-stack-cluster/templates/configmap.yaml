@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-config
+  namespace: {{ .Release.Namespace }}
+
+data:
+  redis.conf: |
+    port 6379
+    bind 0.0.0.0
+    cluster-enabled yes
+    cluster-config-file nodes.conf
+    cluster-node-timeout 5000
+    cluster-announce-port 6379
+    cluster-announce-bus-port 16379
+    protected-mode no
+    dir /data
+    enable-module-command local
+    loadmodule /opt/redis-stack/lib/redisearch.so
+    loadmodule /opt/redis-stack/lib/rejson.so
+{{ with .Values.redisConfig }}
+{{- if .maxmemory }}{{ printf "    maxmemory %v\n" .maxmemory }}{{- end }}
+{{- if .maxmemoryPolicy }}{{ printf "    maxmemory-policy %v\n" .maxmemoryPolicy }}{{- end }}
+{{- if .maxmemorySamples }}{{ printf "    maxmemory-samples %v\n" .maxmemorySamples }}{{- end }}
+{{- if .ioThreads }}{{ printf "    io-threads %v\n" .ioThreads }}{{- end }}
+{{- if .ioThreadsDoReads }}{{ printf "    io-threads-do-reads %v\n" .ioThreadsDoReads }}{{- end }}
+{{- if .latencyMonitorThreshold }}{{ printf "    latency-monitor-threshold %v\n" .latencyMonitorThreshold }}{{- end }}
+{{- if .activedefrag }}{{ printf "    activedefrag %v\n" .activedefrag }}{{- end }}
+{{- if .activeDefragCycleMin }}{{ printf "    active-defrag-cycle-min %v\n" .activeDefragCycleMin }}{{- end }}
+{{- if .activeDefragCycleMax }}{{ printf "    active-defrag-cycle-max %v\n" .activeDefragCycleMax }}{{- end }}
+{{- if .appendonly }}{{ printf "    appendonly %v\n" .appendonly }}{{- end }}
+{{- if .appendfsync }}{{ printf "    appendfsync %v\n" .appendfsync }}{{- end }}
+{{- if .noAppendfsyncOnRewrite }}{{ printf "    no-appendfsync-on-rewrite %v\n" .noAppendfsyncOnRewrite }}{{- end }}
+{{- if .aofUseRdbPreamble }}{{ printf "    aof-use-rdb-preamble %v\n" .aofUseRdbPreamble }}{{- end }}
+{{- if .replDisklessSync }}{{ printf "    repl-diskless-sync %v\n" .replDisklessSync }}{{- end }}
+{{- if .replDisklessSyncDelay }}{{ printf "    repl-diskless-sync-delay %v\n" .replDisklessSyncDelay }}{{- end }}
+{{- if .lazyfreeLazyEviction }}{{ printf "    lazyfree-lazy-eviction %v\n" .lazyfreeLazyEviction }}{{- end }}
+{{- if .save }}
+{{- range .save }}{{ printf "    save %v\n" . }}{{- end }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,23 @@
+resources:
+#  - additional-scrape-configs.yaml
+  ## ServiceMonitors
+  - ingress-nginx-servicemonitor.yaml
+  - vault-servicemonitor.yaml
+  #- loki-servicemonitor.yaml
+  - cluster-autoscaler-servicemonitor.yaml
+  - argocd-servicemonitor.yaml
+  - otel-collector-servicemonitor.yaml
+  - cert-manager-servicemonitor.yaml
+  ## Alerting rules
+  - redis-alerts.yaml
+  - alert-rules.yaml
+  ## Dashboards
+  - dashboards/ingress-configmap.yaml
+  - dashboards/loki-configmap.yaml
+  - dashboards/redis-cluster-configmap.yaml
+  - dashboards/hpa-configmap.yaml
+  - dashboards/k8s-cm.yaml
+  - dashboards/fullnode-cm.yaml
+  - dashboards/kubernetes-autoscaling-cm.yaml
+  - dashboards/argocd-cm.yaml
+  - dashboards/kube-state-metrics-cm.yaml

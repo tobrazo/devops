@@ -1,0 +1,26 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cert-manager-issuer
+  namespace: argocd
+  annotations:
+    # After cert-manager (wave 8) installs its CRDs.
+    argocd.argoproj.io/sync-wave: "15"
+    environment: prod
+spec:
+  project: platform
+  # Applies the ClusterIssuer (letsencrypt-dns). Needs the
+  # `cloudflare-api-token-secret` Secret to issue certs — see secrets.yaml.
+  source:
+    repoURL: https://github.com/tobrazo/devops
+    targetRevision: main
+    path: gitops/platform/cert-manager-external-dns
+    directory:
+      recurse: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cert-manager
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

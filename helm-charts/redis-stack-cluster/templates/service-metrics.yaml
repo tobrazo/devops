@@ -1,0 +1,17 @@
+{{- if .Values.redisExporter.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-metrics
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: redis-cluster
+    release: {{ .Release.Name }}
+spec:
+  ports:
+    - name: metrics
+      port: {{ .Values.redisExporter.port }}
+      targetPort: metrics
+  selector:
+    app: redis-cluster
+{{- end }}

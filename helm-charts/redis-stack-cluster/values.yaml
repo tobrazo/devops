@@ -1,0 +1,149 @@
+# Default values for redis-stack-cluster.
+# A 6-node Redis Stack cluster (3 masters + 3 replicas) with RediSearch/ReJSON,
+# an in-pod IP-reconciliation hook, an optional Prometheus exporter and a
+# cluster-bootstrap Job. Override per environment with `-f values-<env>.yaml`.
+
+replicaCount: 6
+
+# Pin pods to a node instance-type via nodeAffinity.
+# Disabled by default so the chart is cloud-agnostic. Enable and set `type`
+# to your node label value, e.g. an AWS instance type or a DO droplet slug.
+affinity:
+  enabled: false
+  # type: r5.large
+
+# Pod anti-affinity spreading replicas across nodes.
+# "soft" (default) = preferred — won't block scheduling on small/kind clusters;
+# "hard" = required — strict HA, needs at least replicaCount nodes.
+podAntiAffinity: soft
+
+# Pod/container security hardening (kube-score / kube-linter friendly).
+# runAsUser/fsGroup default to 1000; adjust if your image needs a specific uid.
+securityContext:
+  enabled: true
+  pod:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  container:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: ["ALL"]
+
+# Opt-in NetworkPolicy: restrict 6379/16379 to pods labelled per `allowFrom`
+# plus intra-cluster gossip. The idiomatic in-cluster control (the chart runs
+# protected-mode off for clustering — see README security note).
+networkPolicy:
+  enabled: false
+  # Extra pod-label selectors allowed to reach the client port.
+  allowFrom: []
+  #  - podSelector:
+  #      matchLabels:
+  #        role: redis-client
+
+updateStrategy:
+  type: RollingUpdate
+
+terminationGracePeriodSeconds: 60
+
+image:
+  repository: redis/redis-stack
+  tag: 7.4.0-v7
+  pullPolicy: IfNotPresent
+
+service:
+  port: 6379
+  gossipPort: 16379
+  headless: redis-cluster
+
+storage:
+  size: 4Gi
+  # Empty string ("") uses the cluster default StorageClass.
+  # Set to your own class, e.g. gp3 (AWS), do-block-storage (DigitalOcean),
+  # standard (GKE), managed-premium (AKS), etc.
+  className: ""
+
+resources:
+  requests:
+    memory: 512Mi
+    cpu: 250m
+  limits:
+    memory: 2Gi
+    cpu: "1"
+
+readinessProbe:
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+livenessProbe:
+  initialDelaySeconds: 15
+  periodSeconds: 20
+  timeoutSeconds: 5
+  failureThreshold: 5
+
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 4
+
+# In-pod postStart hook that reconciles nodes.conf when a pod IP changes
+# (StatefulSet pods can get a new IP on reschedule).
+fixIP:
+  enabled: true
+  maxWaitSeconds: 120
+  retryIntervalSeconds: 2
+
+# Optional out-of-pod CronJob that execs the same fix into every pod.
+# Off by default — the postStart hook above usually suffices.
+redisFixCronjob:
+  enabled: false
+  image:
+    repository: bitnami/kubectl
+    tag: "1.31"
+    pullPolicy: IfNotPresent
+
+redisExporter:
+  enabled: true
+  image: oliver006/redis_exporter:v1.54.0
+  port: 9121
+  env:
+    - name: REDIS_ADDR
+      value: redis://localhost:6379
+  resources:
+    requests:
+      cpu: 25m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+
+#############################################
+#           REDIS CONFIG
+#############################################
+redisConfig:
+  # --- MEMORY ---
+  maxmemory: 1500mb
+  maxmemoryPolicy: allkeys-lru
+  maxmemorySamples: 7
+
+  # --- IO THREADS ---
+  ioThreads: 2
+  ioThreadsDoReads: "yes"
+
+  # --- LATENCY ---
+  latencyMonitorThreshold: 100
+
+  # --- SNAPSHOTS ---
+  save:
+    - "900 1"
+    - "300 10"
+
+  # --- AOF (everysec) ---
+  appendonly: "yes"
+  appendfsync: "everysec"
+  aofUseRdbPreamble: "yes"
+  noAppendfsyncOnRewrite: "yes"

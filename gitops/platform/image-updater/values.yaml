@@ -1,0 +1,10 @@
+# Values for the argoproj "argocd-image-updater" chart.
+# Referenced by clusters/*/apps/platform/argocd-image-updater.yaml via $values.
+config:
+  logLevel: info
+  # Registries can be configured here; GHCR works out of the box for public images.
+  # For private images, create the pull secret referenced by your Applications
+  # (e.g. argocd/ghcr-creds) and reference it per-app.
+
+metrics:
+  enabled: true

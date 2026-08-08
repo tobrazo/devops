@@ -1,0 +1,44 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: vault
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+    environment: prod
+spec:
+  project: platform
+  # Installs Vault (HA, Raft). Init/unseal/configure is a manual runbook —
+  # see platform/vault/README.md (unseal keys can't be GitOps-managed).
+  source:
+    repoURL: https://helm.releases.hashicorp.com
+    chart: vault
+    targetRevision: 0.31.0
+    helm:
+      releaseName: vault
+      values: |
+        global:
+          enabled: true
+        server:
+          dev:
+            enabled: false
+          ha:
+            enabled: true
+            raft:
+              enabled: true
+              setNodeId: true
+          service:
+            type: ClusterIP
+        ui:
+          enabled: true
+        injector:
+          enabled: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: vault
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

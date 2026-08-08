@@ -1,0 +1,44 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: redis-cluster-init
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: init
+          image: {{ printf "%s:%s" .Values.image.repository .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Waiting for Redis pods to be ready..."
+              REPLICAS={{ .Values.replicaCount | default 6 }}
+              for i in $(seq 0 $((REPLICAS - 1))); do
+                while true; do
+                  redis-cli -h redis-cluster-$i.redis-cluster.{{ .Release.Namespace }}.svc.cluster.local ping && break
+                  echo "Waiting for redis-cluster-$i..."
+                  sleep 2
+                done
+              done
+
+              echo "Checking if cluster already exists..."
+              CLUSTER_INFO=$(redis-cli -h redis-cluster-0.redis-cluster.{{ .Release.Namespace }}.svc.cluster.local cluster info | grep cluster_state)
+              if echo "$CLUSTER_INFO" | grep -q "ok"; then
+                echo "Cluster already created. Skipping init."
+                exit 0
+              fi
+
+              echo "Creating cluster..."
+              NODES=""
+              for i in $(seq 0 $((REPLICAS - 1))); do
+                NODES="$NODES redis-cluster-$i.redis-cluster.{{ .Release.Namespace }}.svc.cluster.local:6379"
+              done
+              yes yes | redis-cli --cluster create $NODES --cluster-replicas 1

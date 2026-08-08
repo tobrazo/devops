@@ -1,0 +1,19 @@
+apiVersion: v2
+name: redis-stack-cluster
+description: Production-ready Redis Stack cluster (Redis + RediSearch + RedisJSON) with self-healing IP reconciliation, a cluster-bootstrap Job, and a Prometheus exporter.
+type: application
+version: 0.1.0
+appVersion: "7.4.0"
+icon: https://raw.githubusercontent.com/devicons/devicon/master/icons/redis/redis-original.svg
+keywords:
+  - redis
+  - redis-stack
+  - redis-cluster
+  - cache
+  - statefulset
+home: https://github.com/tobrazo/devops
+sources:
+  - https://github.com/tobrazo/devops
+maintainers:
+  - name: tobrazo
+    url: https://github.com/tobrazo

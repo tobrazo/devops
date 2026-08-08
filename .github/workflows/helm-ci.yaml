@@ -1,0 +1,60 @@
+name: helm-ci
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'helm-charts/**'
+      - 'gitops/**'
+      - '.github/workflows/helm-ci.yaml'
+  pull_request:
+    paths:
+      - 'helm-charts/**'
+      - 'gitops/**'
+      - '.github/workflows/helm-ci.yaml'
+
+jobs:
+  lint-and-template:
+    name: helm lint + template
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.16.1
+
+      - name: helm lint
+        run: |
+          set -e
+          for c in \
+            helm-charts/redis-stack-cluster \
+            helm-charts/argo-rollouts-blue-green \
+            gitops/workloads/nginx \
+            gitops/platform/centrifugo; do
+            echo "==> helm lint $c"
+            helm lint "$c"
+          done
+
+      - name: helm template (render check)
+        run: |
+          set -e
+          helm template redis helm-charts/redis-stack-cluster \
+            -f helm-charts/redis-stack-cluster/values-production.yaml > /dev/null
+          helm template app helm-charts/argo-rollouts-blue-green > /dev/null
+          helm template app helm-charts/argo-rollouts-blue-green \
+            -f helm-charts/argo-rollouts-blue-green/values-deployment.yaml > /dev/null
+          helm template nginx gitops/workloads/nginx > /dev/null
+          helm template centrifugo gitops/platform/centrifugo > /dev/null
+
+      - name: kube-linter (informational)
+        continue-on-error: true
+        run: |
+          curl -sSLf https://github.com/stackrox/kube-linter/releases/latest/download/kube-linter-linux.tar.gz \
+            | tar -xz kube-linter
+          helm template app helm-charts/argo-rollouts-blue-green > /tmp/blue-green.yaml
+          helm template nginx gitops/workloads/nginx > /tmp/nginx.yaml
+          helm template redis helm-charts/redis-stack-cluster \
+            -f helm-charts/redis-stack-cluster/values-production.yaml > /tmp/redis.yaml
+          ./kube-linter lint /tmp/blue-green.yaml /tmp/nginx.yaml /tmp/redis.yaml || true

@@ -1,0 +1,22 @@
+apiVersion: opentelemetry.io/v1alpha1
+kind: Instrumentation
+metadata:
+  name: auto-instrumentation
+  namespace: monitoring
+spec:
+  exporter:
+    endpoint: http://tracing-collector-collector.monitoring.svc.cluster.local:4318
+
+  propagators:
+    - tracecontext
+    - baggage
+
+  sampler:
+    type: parentbased_always_on
+
+  nodejs:
+    env:
+      - name: OTEL_EXPORTER_OTLP_ENDPOINT
+        value: http://tracing-collector-collector.monitoring.svc.cluster.local:4318
+      - name: OTEL_RESOURCE_ATTRIBUTES
+        value: service.name=test-otel-nodejs,service.namespace=monitoring

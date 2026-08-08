@@ -1,0 +1,183 @@
+kubeControllerManager:
+  enabled: false
+
+kubeScheduler:
+  enabled: false
+
+prometheusOperator:
+  admissionWebhooks:
+    enabled: true 
+  tls:
+    enabled: false
+
+prometheus-node-exporter:
+  prometheus:
+    monitor:
+      enabled: false
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_endpoint_node_name]
+          targetLabel: instance
+      ##  - sourceLabels: [__meta_kubernetes_endpoint_node_name]
+      ##    targetLabel: node
+      ##  - sourceLabels: [__meta_kubernetes_node_label_topology_kubernetes_io_region]
+      ##    targetLabel: region
+
+grafana:
+  adminUser: admin
+  adminPassword: changeme  # override via a Secret in real deployments
+  sidecar:
+    dashboards:
+      searchNamespace: ALL
+
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-dns
+      nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    hosts:
+      - grafana-prod.example.com
+    tls:
+      - hosts:
+          - grafana-prod.example.com
+        secretName: grafana-tls
+
+
+  persistence:
+    enabled: true
+    storageClassName: ""  # cluster default; set your StorageClass
+    accessModes: ["ReadWriteOnce"]
+    size: 1Gi
+  additionalDataSources:
+    - name: Alertmanager
+      type: alertmanager
+      url: http://kube-prometheus-stack-alertmanager.monitoring:9093
+      access: proxy
+      editable: true
+      version: 2
+      jsonData:
+        implementation: prometheus
+    - name: Loki
+      type: loki
+      url: http://loki.logs.svc.cluster.local:3100
+      access: proxy
+      editable: true
+    - name: Tempo
+      type: tempo
+      access: proxy
+      url: http://tempo.monitoring.svc.cluster.local:3200
+      editable: true
+      jsonData:
+        httpMethod: GET
+        tracesToLogsV2:  # logs correlation
+          datasourceUid: Loki
+          spanStartTimeShift: "-1m"
+          spanEndTimeShift: "1m"
+          filterByTraceID: true
+          filterBySpanID: false
+        tracesToMetrics:  # RED-metrics generation
+          datasourceUid: Prometheus  # Prometheus datasource UID
+          spanStartTimeShift: "-1m"  # Time window before the span timestamp to consider
+          spanEndTimeShift: "1m"
+          tags:  # Tags to include in the metrics
+            - key: service.name
+              value: service
+            - key: job
+            - key: instance
+          queries:  # Metrics to generate
+            - name: Latency
+              query: 'histogram_quantile(0.99, sum(rate(traces_spanmetrics_latency_bucket{$$__tags}[5m])))'
+            - name: Request Rate
+              query: 'sum(rate(traces_spanmetrics_calls_total{$$__tags}[5m]))'
+            - name: Error Rate
+              query: 'sum(rate(traces_spanmetrics_calls_total{status="STATUS_CODE_ERROR", $$__tags}[5m]))'
+        nodeGraph:
+          enabled: true  # Optional: enables node graph in trace view for dependency visualization
+        serviceMap:  # Optional: enables service map visualization
+          enabled: true
+          datasourceUid: Prometheus
+
+
+prometheus:
+  prometheusSpec:
+    externalLabels:
+      cluster: prod 
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    probeSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    retention: 180d
+    retentionSize: 45GiB
+    scrapeInterval: 30s
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: ""  # cluster default; set your StorageClass
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 50Gi
+
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-dns
+      nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    hosts:
+      - prom-prod.example.com
+    tls:
+      - hosts:
+          - prom-prod.example.com
+        secretName: prometheus-tls
+
+alertmanager:
+
+  alertmanagerSpec:
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: ""  # cluster default; set your StorageClass
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 1Gi
+
+
+  config:
+    global:
+      resolve_timeout: 5m
+    inhibit_rules:
+      - source_matchers:
+          - 'severity = critical'
+        target_matchers:
+          - 'severity =~ warning|info'
+        equal:
+          - 'namespace'
+          - 'alertname'
+      - source_matchers:
+          - 'severity = warning'
+        target_matchers:
+          - 'severity = info'
+        equal:
+          - 'namespace'
+          - 'alertname'
+      - source_matchers:
+          - 'alertname = InfoInhibitor'
+        target_matchers:
+          - 'severity = info'
+        equal:
+          - 'namespace'
+    route:
+      group_by: [ 'alertname', 'job' ]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 12h
+      receiver: discord
+    receivers:
+      - name: discord
+        discord_configs:
+          - webhook_url: 'https://discord.com/api/webhooks/REPLACE_WITH_WEBHOOK_ID/REPLACE_WITH_WEBHOOK_TOKEN'
+      - name: 'null'
+    templates:
+      - '/etc/alertmanager/config/*.tmpl'

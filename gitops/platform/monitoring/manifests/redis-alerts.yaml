@@ -1,0 +1,27 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: redis-cluster-alerts
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: redis.health
+      rules:
+        - alert: RedisInstanceDown
+          expr: 'redis_up == 0'
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: 'Redis instance {{ $labels.instance }} is down'
+            description: 'Redis exporter reports the instance {{ $labels.instance }} as unavailable.'
+        - alert: RedisHighMemoryUsage
+          expr: 'redis_memory_used_bytes / clamp_min(redis_memory_max_bytes, 1) > 0.85'
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: 'Redis high memory usage on {{ $labels.instance }}'
+            description: 'Redis memory usage exceeded 85% of the configured maxmemory value.'

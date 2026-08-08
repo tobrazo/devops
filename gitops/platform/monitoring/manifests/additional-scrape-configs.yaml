@@ -1,0 +1,16 @@
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: external-node-exporter
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  jobName: external-node-exporter
+  staticConfigs:
+    - targets:
+        # Example: scrape a node_exporter running on a VM outside the cluster.
+        # Replace with your host(s), e.g. node-exporter.example.internal:9100
+        - node-exporter.example.internal:9100
+  metricsPath: /metrics
+  scheme: HTTP

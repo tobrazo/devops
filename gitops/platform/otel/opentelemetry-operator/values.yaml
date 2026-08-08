@@ -1,0 +1,7 @@
+admissionWebhooks:
+  certManager:
+    # Self-signed webhook cert so the operator does NOT hard-depend on
+    # cert-manager being installed/ready first (avoids a first-sync failure).
+    enabled: false
+  autoGenerateCert:
+    enabled: true

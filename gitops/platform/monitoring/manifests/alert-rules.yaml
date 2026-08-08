@@ -1,0 +1,37 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: platform-alert-rules
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: argo-cd.health
+      rules:
+        - alert: ArgoCDApplicationOutOfSync
+          expr: 'max by (name, project) (argocd_app_sync_status{sync_status!="Synced"}) == 1'
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Argo CD application {{ $labels.project }}/{{ $labels.name }} is out of sync"
+            description: "Argo CD application {{ $labels.project }}/{{ $labels.name }} has been out of sync for more than 15 minutes."
+        - alert: ArgoCDApplicationDegraded
+          expr: 'max by (name, project) (argocd_app_health_status{health_status=~"Degraded|Suspended|Missing"}) == 1'
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Argo CD application {{ $labels.project }}/{{ $labels.name }} is unhealthy"
+            description: "Argo CD application {{ $labels.project }}/{{ $labels.name }} reported health status {{ $labels.health_status }} for at least 10 minutes."
+    - name: cluster.capacity
+      rules:
+        - alert: NodeFilesystemFillingUp
+          expr: '(node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}) < 0.15'
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Node filesystem / is filling up on {{ $labels.instance }}"
+            description: "The root filesystem on node {{ $labels.instance }} has less than 15% space available."

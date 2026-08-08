@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: centrifugo
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: centrifugo
+  template:
+    metadata:
+      labels:
+        app: centrifugo
+    spec:
+      containers:
+        - name: centrifugo
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          command: ["centrifugo"]
+          args:
+            - "-c"
+            - "/centrifugo/config/config.json"
+          ports:
+            - containerPort: 8000
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          volumeMounts:
+            - name: config
+              mountPath: /centrifugo/config
+      volumes:
+        - name: config
+          configMap:
+            name: centrifugo-config

@@ -1,0 +1,16 @@
+nginx "{{ .Release.Name }}" deployed as an Argo Rollouts blue/green to namespace "{{ .Release.Namespace }}".
+
+Watch and promote the rollout:
+  kubectl argo rollouts get rollout {{ include "nginx.fullname" . }} -n {{ .Release.Namespace }} --watch
+  kubectl argo rollouts promote {{ include "nginx.fullname" . }} -n {{ .Release.Namespace }}
+
+Services:
+  active : {{ .Values.service.activeName }}
+  preview: {{ .Values.service.previewName }}
+
+Try it locally (active service):
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ .Values.service.activeName }} 8080:{{ .Values.service.port }}
+  # then open http://localhost:8080
+{{ if .Values.ingress.enabled }}
+Ingress: http://{{ .Values.ingress.host }}
+{{- end }}
