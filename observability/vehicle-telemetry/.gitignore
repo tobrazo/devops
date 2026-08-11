@@ -1,0 +1,5 @@
+.env
+compose-stack/.env
+*.pyc
+*.bak
+__pycache__/

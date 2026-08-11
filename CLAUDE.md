@@ -36,6 +36,8 @@ kubectl kustomize gitops/platform/otel/additional-resources
 
 CI: `.github/workflows/helm-ci.yaml` runs `helm lint` + `helm template` (blocking) and `kube-linter` (informational) on pushes/PRs touching `helm-charts/**` or `gitops/**`. Helm 3 is required (`helm version` → v3.x).
 
+`.github/workflows/observability-ci.yaml` covers `observability/**` and `mcp/**`: `promtool check rules` + `promtool test rules`, `compileall` over every Python tree, and a live run of the demo stack that asserts the exporter reports, Prometheus scrapes it, all 9 rules load, and Grafana serves the provisioned dashboard.
+
 ## Helm chart conventions (apply to every chart here)
 
 - **Namespace comes from the release, never a value.** Templates use `{{ .Release.Namespace }}` — there is **no** `.Values.namespace` key. This is deliberate: it makes `helm install -n <ns>` and ArgoCD `destination.namespace` the single source of truth. Do not reintroduce a `namespace` value.
@@ -68,7 +70,9 @@ App-of-apps on a **single cluster, namespace-per-component**.
 - `ansible/` — standalone roles (haproxy, redis+sentinel, redis/zfs exporters, etcd maintenance) and a Prometheus/alerting config set. Each has its own README and playbook (`*.yml`).
 - `terraform/web-server/` — a single cloud web-server module (`WebServer.tf` + `userdata.tpl`).
 - `python/evmpolls_scraper/` — a standalone scraper (`requirements.txt`).
+- `observability/vehicle-telemetry/` — an end-to-end monitoring slice: exporter, mock data source, alert rules + unit tests, dashboard, Compose stack, k8s deploy and an AI triage agent. See below.
 - `mcp/ansible-ops/` — a stdio MCP server (`server.py`) exposing an Ansible control node as tools/resources. See below.
+- `mcp/observability-ops/` — a stdio MCP server over Prometheus / Loki / Alertmanager. See below.
 
 ### `mcp/ansible-ops`
 
@@ -83,6 +87,37 @@ App-of-apps on a **single cluster, namespace-per-component**.
   (cd mcp/ansible-ops/example && ansible-playbook --syntax-check -i inventory/hosts.yml playbooks/*.yml)
   ```
 
+### `observability/vehicle-telemetry`
+
+A vertical slice: exporter → alert rules → dashboard → Compose/k8s deploys → AI triage.
+
+- **Single source of truth for rules and dashboards.** `alerts/pandora-rules.yml` and `dashboards/pandora-vehicle.json` are consumed by *both* the Compose stack (bind-mounted `../alerts`, `../dashboards`) and the k8s deploy. Don't fork a second copy under `compose-stack/`.
+- **`rule_files` globs `*-rules.yml`, not `*.yml`.** `alerts/` also holds `pandora-rules.test.yml`, a promtool unit-test file; the rule manager cannot parse it and Prometheus restart-loops if the glob widens. Any new rule file must end in `-rules.yml`.
+- **Alert rules have unit tests — keep them passing and extend them with every new rule.** `promtool test rules` asserts exact labels *and* rendered annotations, so editing an annotation string means editing the test too.
+- **The mock cabinet is what makes this repo verifiable.** `mock/mock_pandora.py` must keep serving the same contract as the real cabinet (`POST /api/users/login` setting a cookie, `GET /api/updates` returning `{ts, stats, time}`, 401 without the cookie). If the exporter's parsing changes, change the mock in the same commit or the demo and CI silently stop proving anything.
+- **Read-only exporter, singleton by design.** Pandora session cookies aren't shareable, so the Deployment is `replicas: 1` + `strategy: Recreate`. `start_http_server()` runs *before* login on purpose, so `/metrics` answers while credentials retry.
+- **The browser User-Agent is load-bearing** — Pandora answers the default `python-requests` UA with `200` and no cookies. Keep `BROWSER_UA`.
+- **The login contract is reverse-engineered**, so it lives in env vars (`PANDORA_LOGIN_PATH` / `_FIELD` / `_FORMAT`, plus `PANDORA_SCHEME` for the mock). A Pandora UI change is a config change; don't hardcode a new path.
+- **`/metrics` exposes vehicle GPS.** Every Compose port binds to `127.0.0.1`, and `GF_AUTH_ANONYMOUS_ENABLED` is off unless `.env.demo` turns it on. Never publish an example that binds `0.0.0.0` or enables anonymous Grafana outside the demo.
+- **Compose specifics:** the project name is pinned (`name: vehicle-telemetry`) so volumes can't collide with another `compose-stack` directory, and services deliberately have no `container_name`. `ANTHROPIC_API_KEY` is *not* marked required with `:?` — compose interpolates services outside the active profile, so that would break the demo; the agent checks at startup instead.
+- **`.env.demo` is committed and must stay secret-free.** `.env` is gitignored. No real credentials or device IDs anywhere: docs use `1234567890`, manifests use `REPLACE_WITH_*`.
+- **The triage agent is read-only by construction** — three query tools, a bounded loop, and no ability to restart or silence anything. Don't add a mutating tool to it.
+- Validate with:
+  ```bash
+  python3 -m compileall -q observability/vehicle-telemetry
+  (cd observability/vehicle-telemetry/alerts && docker run --rm --entrypoint promtool \
+     -v "$PWD":/w -w /w prom/prometheus:v2.55.1 test rules pandora-rules.test.yml)
+  (cd observability/vehicle-telemetry/compose-stack && \
+     docker compose --env-file .env.demo --profile demo config -q)
+  ```
+
+### `mcp/observability-ops`
+
+- **Zero hardcoded infrastructure** — Prometheus / Loki / Alertmanager URLs come from `OBS_MCP_*` env vars and default to localhost. Same rule as `ansible-ops`: never reintroduce a literal endpoint.
+- **Read-only by default.** The two silence tools are defined *inside* `if ALLOW_WRITE:` so they don't even register unless `OBS_MCP_ALLOW_WRITE` is set. Keep that gate — silences decide whether humans get paged.
+- Results are truncated at `OBS_MCP_MAX_CHARS` and range queries are downsampled before returning; a wide query would otherwise flood the client's context window.
+- Same `FastMCP` → `MCPServer` import shim as `ansible-ops` — don't collapse it to one branch.
+
 ## Validation before committing
 
 ```bash
@@ -90,7 +125,7 @@ App-of-apps on a **single cluster, namespace-per-component**.
 # 2) sanitization gate — must return CLEAN (generic leak signatures; see the
 #    sanitize-check skill for the full scan + how-to-fix)
 grep -rniE 'dop_v1|GOCSPX|AKIA[0-9A-Z]{16}|hvs\.[A-Za-z0-9]{6}|discord\.com/api/webhooks/[0-9]|BEGIN (RSA|EC|OPENSSH|PRIVATE)|[0-9]{1,3}(\.[0-9]{1,3}){3}|@(gmail|yahoo|outlook)\.com' \
-  helm-charts gitops terraform ansible python mcp \
+  helm-charts gitops terraform ansible python mcp observability \
   --include='*.yaml' --include='*.yml' --include='*.tpl' --include='*.js' \
   --include='*.py' --include='*.md' --include='*.json' --include='*.tf' \
   | grep -vE '0\.0\.0\.0|127\.0\.0\.1|10\.[0-9]|192\.168|172\.(1[6-9]|2[0-9]|3[01])\.|example\.(com|org|net|internal)|kubernetes\.default' || echo CLEAN

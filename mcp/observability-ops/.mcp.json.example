@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "observability-ops": {
+      "type": "stdio",
+      "command": "./mcp/observability-ops/.venv/bin/python",
+      "args": ["./mcp/observability-ops/server.py"],
+      "env": {
+        "OBS_MCP_PROMETHEUS_URL": "http://localhost:9090",
+        "OBS_MCP_LOKI_URL": "http://localhost:3100",
+        "OBS_MCP_ALERTMANAGER_URL": "http://localhost:9093",
+        "OBS_MCP_ALLOW_WRITE": ""
+      }
+    }
+  }
+}

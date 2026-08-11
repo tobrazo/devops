@@ -1,0 +1,31 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'pandora-lab'
+    monitor: 'pandora-exporter'
+
+rule_files:
+  # Deliberately *-rules.yml, not *.yml: the same directory also holds
+  # pandora-rules.test.yml, which is a promtool unit-test file and would
+  # fail rule-manager parsing.
+  - /etc/prometheus/rules/*-rules.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+
+scrape_configs:
+
+  # Self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # The exporter itself
+  - job_name: 'pandora-exporter'
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    static_configs:
+      - targets: ['pandora-exporter:9180']
