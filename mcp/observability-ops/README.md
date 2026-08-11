@@ -20,6 +20,10 @@ Instead of alt-tabbing between three UIs to answer "why did that alert fire", yo
 and the assistant queries the metric, charts it over the last hour, reads the logs from
 the same window, and checks whether the scrape target was even up.
 
+> 📖 Wondering when to build one of these versus an autonomous agent? See
+> **[Agent and MCP: who owns the loop](../../observability/vehicle-telemetry/docs/agent-and-mcp.md)**
+> — this server and the alert-triage agent in that project are the worked example.
+
 Nothing about the target stack is baked in: all three endpoints come from environment
 variables. It works against the [vehicle-telemetry](../../observability/vehicle-telemetry)
 demo stack, a `kube-prometheus-stack` port-forward, or production behind a tunnel.

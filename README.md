@@ -54,6 +54,7 @@ flowchart LR
 | 🚗 **[observability/vehicle-telemetry](observability/vehicle-telemetry)** | A full **observability vertical slice**: exporter → 10 alert rules with promtool unit tests → 14-panel Grafana dashboard → Compose *and* a Helm chart (rules as a PrometheusRule, dashboard as a ConfigMap) → an AI agent that triages firing alerts. Ships a mock data source, so `--profile demo` runs the whole stack with live data and no hardware. |
 | 🤖 **[mcp/ansible-ops](mcp/ansible-ops)** | An **MCP server** that turns an Ansible control node into 17 tools an AI assistant can call — playbooks with dry-run, vault, SSH, Docker and diagnostics. Hosts resolve from your inventory; a runnable example tree is included. |
 | 🔭 **[mcp/observability-ops](mcp/observability-ops)** | An **MCP server** over Prometheus / Loki / Alertmanager — 13 tools for PromQL, LogQL, alerts, targets, rules and silences. Read-only unless you opt in, so an assistant can investigate but not mute your paging. |
+| 📖 **[Agent and MCP: who owns the loop](observability/vehicle-telemetry/docs/agent-and-mcp.md)** | The two AI components above look alike and are architecturally opposite. Long-form: why an agent rather than a dashboard, how its loop is built, when to reach for which, and the Telegram token trap that cost an afternoon. |
 
 ---
 
