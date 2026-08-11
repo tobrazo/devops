@@ -262,7 +262,7 @@ Two different things, deliberately:
 | | What it is | When it runs |
 |---|---|---|
 | 🔎 **[agent/](agent)** — alert-triage | An Alertmanager **webhook**: Claude gets the alert plus read-only PromQL/LogQL tools and returns a diagnosis with evidence instead of a threshold | Autonomously, in the alerting path |
-| 🔭 **[mcp/observability-ops](../../mcp/observability-ops)** | An **MCP server**: 12 tools that let an assistant query this stack (or any Prometheus/Loki/Alertmanager) from a conversation | Interactively, when you ask |
+| 🔭 **[mcp/observability-ops](../../mcp/observability-ops)** | An **MCP server**: 13 tools that let an assistant query this stack (or any Prometheus/Loki/Alertmanager) from a conversation | Interactively, when you ask |
 
 The triage agent is opt-in — `--profile triage` plus an `ANTHROPIC_API_KEY` — and read-only
 by construction: three query tools, no ability to restart anything or silence an alert.

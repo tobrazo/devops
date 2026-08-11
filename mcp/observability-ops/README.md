@@ -15,7 +15,7 @@
 ---
 
 An [MCP](https://modelcontextprotocol.io) server that turns a running Prometheus /
-Loki / Alertmanager stack into **12 tools** an assistant can call mid-conversation.
+Loki / Alertmanager stack into **13 tools** an assistant can call mid-conversation.
 Instead of alt-tabbing between three UIs to answer "why did that alert fire", you ask —
 and the assistant queries the metric, charts it over the last hour, reads the logs from
 the same window, and checks whether the scrape target was even up.
@@ -63,6 +63,7 @@ tools — which decide whether humans get paged — only register when
 | `loki_query` | What were the services logging at that moment? |
 | `loki_labels` | Which log streams exist, and what values does a label take? |
 | `am_alerts` | What survived grouping, inhibition and silencing? |
+| `am_silences` | What is currently muted, by whom, until when? |
 | `am_silence_create` 🔒 | Mute a matcher for N hours |
 | `am_silence_expire` 🔒 | Un-mute it again |
 
