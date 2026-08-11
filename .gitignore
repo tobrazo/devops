@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Ansible
+*.retry
+.pass.vault
+.vault_pass
+.ansible/
+
+# Local MCP client config (copy .mcp.json.example instead)
+.mcp.json
+
+# Editor / OS
+.DS_Store
+.idea/
+*.swp

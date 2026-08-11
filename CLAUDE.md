@@ -68,6 +68,20 @@ App-of-apps on a **single cluster, namespace-per-component**.
 - `ansible/` — standalone roles (haproxy, redis+sentinel, redis/zfs exporters, etcd maintenance) and a Prometheus/alerting config set. Each has its own README and playbook (`*.yml`).
 - `terraform/web-server/` — a single cloud web-server module (`WebServer.tf` + `userdata.tpl`).
 - `python/evmpolls_scraper/` — a standalone scraper (`requirements.txt`).
+- `mcp/ansible-ops/` — a stdio MCP server (`server.py`) exposing an Ansible control node as tools/resources. See below.
+
+### `mcp/ansible-ops`
+
+- **Zero hardcoded infrastructure — keep it that way.** Hosts, users and SSH keys are resolved at runtime from the Ansible inventory via `ansible-inventory --list` (`_hosts()`); paths and fallbacks come from `ANSIBLE_MCP_*` env vars. Never reintroduce a literal host/IP/user dict — that is exactly what was scrubbed out of this code.
+- `ANSIBLE_MCP_DIR` defaults to the bundled `example/` tree, so the server runs with no configuration. Keep `example/` valid: `ansible-playbook --syntax-check` must pass and every address stays under `example.com`.
+- `ansible_list_playbooks` reports each playbook's **first comment line** as its description — new example playbooks need a `# one-liner` under the `---`.
+- The MCP SDK renamed `FastMCP` → `MCPServer` in 2.0; the import is a `try/except` shim supporting both. Don't collapse it to one branch.
+- Vault flags are added only when the password file exists (`_vault_args()`), so the server works without a vault. `vault_view` rejects paths resolving outside `ANSIBLE_MCP_DIR` — keep that guard.
+- Validate with:
+  ```bash
+  python3 -m py_compile mcp/ansible-ops/server.py
+  (cd mcp/ansible-ops/example && ansible-playbook --syntax-check -i inventory/hosts.yml playbooks/*.yml)
+  ```
 
 ## Validation before committing
 
@@ -76,8 +90,10 @@ App-of-apps on a **single cluster, namespace-per-component**.
 # 2) sanitization gate — must return CLEAN (generic leak signatures; see the
 #    sanitize-check skill for the full scan + how-to-fix)
 grep -rniE 'dop_v1|GOCSPX|AKIA[0-9A-Z]{16}|hvs\.[A-Za-z0-9]{6}|discord\.com/api/webhooks/[0-9]|BEGIN (RSA|EC|OPENSSH|PRIVATE)|[0-9]{1,3}(\.[0-9]{1,3}){3}|@(gmail|yahoo|outlook)\.com' \
-  helm-charts gitops --include='*.yaml' --include='*.yml' --include='*.tpl' --include='*.js' \
-  | grep -vE '0\.0\.0\.0|127\.0\.0\.1|10\.[0-9]|192\.168|example\.(com|org|net|internal)|kubernetes\.default' || echo CLEAN
+  helm-charts gitops terraform ansible python mcp \
+  --include='*.yaml' --include='*.yml' --include='*.tpl' --include='*.js' \
+  --include='*.py' --include='*.md' --include='*.json' --include='*.tf' \
+  | grep -vE '0\.0\.0\.0|127\.0\.0\.1|10\.[0-9]|192\.168|172\.(1[6-9]|2[0-9]|3[01])\.|example\.(com|org|net|internal)|kubernetes\.default' || echo CLEAN
 ```
 
 Also eyeball for real company/product names (→ `tobrazo`) and real domains (→ `example.com`); a regex won't reliably catch those.

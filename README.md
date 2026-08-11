@@ -49,6 +49,7 @@ flowchart LR
 | 🧠 **[helm-charts/redis-stack-cluster](helm-charts/redis-stack-cluster)** | 6-node Redis Stack cluster (RediSearch + RedisJSON) — self-healing `nodes.conf` IP reconciliation, bootstrap Job, PDB, exporter, non-root securityContext, opt-in NetworkPolicy. |
 | 🟦🟩 **[helm-charts/argo-rollouts-blue-green](helm-charts/argo-rollouts-blue-green)** | Progressive delivery with **Argo Rollouts** — active/preview services, a working k6 pre-promotion gate, preview ingress, HPA/PDB, matching ArgoCD Application. Runs out of the box; toggles to a plain Deployment. |
 | 🐙 **[gitops/](gitops)** | A complete **ArgoCD app-of-apps platform**: metrics, logs, tracing, TLS/DNS, progressive delivery, secrets — plus a copy-me nginx blue/green workload. |
+| 🤖 **[mcp/ansible-ops](mcp/ansible-ops)** | An **MCP server** that turns an Ansible control node into 17 tools an AI assistant can call — playbooks with dry-run, vault, SSH, Docker and diagnostics. Hosts resolve from your inventory; a runnable example tree is included. |
 
 ---
 
@@ -60,6 +61,7 @@ devops/
 ├── gitops/          → ArgoCD app-of-apps platform + nginx workload
 ├── terraform/       → Infrastructure as Code (cloud web server)
 ├── ansible/         → Configuration-management roles (redis · haproxy · exporters · etcd)
+├── mcp/             → MCP servers for AI-assisted ops (ansible-ops)
 └── python/          → Tooling & scripts
 ```
 
