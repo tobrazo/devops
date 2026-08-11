@@ -1,0 +1,32 @@
+---
+# Application deployment — git checkout, config render, container restart.
+# Idempotent: safe to re-run.
+
+- name: Deploy application sources
+  hosts: web
+  become: true
+  become_user: "{{ deploy_user }}"
+
+  tasks:
+    - name: Check out the application repository
+      ansible.builtin.git:
+        repo: "{{ app_git_repo }}"
+        dest: "{{ deploy_root }}"
+        version: "{{ app_git_branch }}"
+        depth: 1
+      notify: Restart application container
+
+    - name: Render application environment file
+      ansible.builtin.template:
+        src: app.env.j2
+        dest: "{{ deploy_root }}/.env"
+        mode: "0640"
+      notify: Restart application container
+
+  handlers:
+    - name: Restart application container
+      community.docker.docker_container:
+        name: "{{ containers.php }}"
+        state: started
+        restart: true
+      become_user: root

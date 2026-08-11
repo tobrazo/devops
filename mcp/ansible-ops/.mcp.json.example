@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "ansible-ops": {
+      "type": "stdio",
+      "command": "./mcp/ansible-ops/.venv/bin/python",
+      "args": [
+        "./mcp/ansible-ops/server.py"
+      ],
+      "env": {
+        "ANSIBLE_MCP_DIR": "./mcp/ansible-ops/example",
+        "ANSIBLE_MCP_INVENTORY": "inventory/hosts.yml",
+        "ANSIBLE_MCP_SSH_USER": "deploy",
+        "ANSIBLE_MCP_SSH_KEY": "~/.ssh/id_ed25519"
+      }
+    }
+  }
+}

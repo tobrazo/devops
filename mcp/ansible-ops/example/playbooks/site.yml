@@ -1,0 +1,24 @@
+---
+# Full server provisioning — base OS, Docker, deploy user, nginx.
+# The first comment line above is what `ansible_list_playbooks` reports.
+
+- name: Provision all servers
+  hosts: all
+  become: true
+  roles:
+    - common
+
+- name: Configure web tier
+  hosts: web
+  become: true
+  tasks:
+    - name: Ensure nginx is installed
+      ansible.builtin.package:
+        name: nginx
+        state: present
+
+    - name: Ensure nginx is running
+      ansible.builtin.service:
+        name: nginx
+        state: started
+        enabled: true

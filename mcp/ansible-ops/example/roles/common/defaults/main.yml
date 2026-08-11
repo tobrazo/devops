@@ -1,0 +1,13 @@
+---
+# Defaults for the `common` role — readable through the
+# ansible://roles/common/defaults MCP resource.
+
+common_packages:
+  - ca-certificates
+  - curl
+  - git
+  - htop
+  - unzip
+
+common_timezone: "{{ timezone | default('UTC') }}"
+common_manage_firewall: true

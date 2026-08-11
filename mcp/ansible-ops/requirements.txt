@@ -1,0 +1,4 @@
+# MCP Python SDK. 2.x exposes MCPServer, 1.x exposed the same API as FastMCP —
+# server.py imports whichever is present.
+mcp>=1.0.0
+paramiko>=3.4.0

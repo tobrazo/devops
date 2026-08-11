@@ -1,0 +1,19 @@
+---
+# Variables shared by every host.
+#
+# Secrets belong in ansible-vault, never in plaintext here. Encrypt one with:
+#   ansible-vault encrypt_string --name db_root_password 'value'
+# or, from an MCP client, the `vault_encrypt_string` tool.
+
+app_name:       tobrazo-app
+app_domain:     example.com
+app_git_repo:   https://github.com/tobrazo/example-app.git
+app_git_branch: main
+
+timezone:       UTC
+deploy_user:    deploy
+deploy_root:    /srv/{{ app_name }}
+
+# Placeholders — replace with vault-encrypted values before any real use.
+db_root_password: REPLACE_WITH_VAULTED_SECRET
+app_api_token:    REPLACE_WITH_VAULTED_SECRET

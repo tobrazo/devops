@@ -1,0 +1,14 @@
+---
+# Variables for the `web` group.
+
+nginx_worker_processes: auto
+nginx_client_max_body_size: 32m
+
+php_fpm_max_children: 40
+php_fpm_memory_limit: 2G
+
+containers:
+  php:   app_php
+  db:    app_db
+  redis: app_redis
+  cache: app_varnish
