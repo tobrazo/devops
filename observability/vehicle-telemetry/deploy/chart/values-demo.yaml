@@ -1,0 +1,25 @@
+# Demo install: the in-cluster mock cabinet instead of a real vehicle, so the
+# chart can go on a scratch cluster with no Pandora account and no credentials.
+#
+#   helm upgrade --install vt ./deploy/chart -n vehicle-telemetry \
+#     --create-namespace -f ./deploy/chart/values-demo.yaml
+#
+# The exporter's host and scheme point at the mock automatically.
+
+mock:
+  enabled: true
+
+pandora:
+  # The mock accepts any non-empty pair; nothing here is a credential.
+  login: demo@example.com
+  password: demo
+  deviceIds: "1234567890"
+
+# A scratch cluster usually has neither the Prometheus Operator CRDs nor a
+# Grafana sidecar, and rendering those objects would fail the install.
+serviceMonitor:
+  enabled: false
+prometheusRule:
+  enabled: false
+dashboard:
+  enabled: false

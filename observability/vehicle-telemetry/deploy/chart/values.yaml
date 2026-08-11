@@ -1,0 +1,128 @@
+# Default values: the exporter against a real Pandora cabinet, with the alert
+# rules and dashboard shipped as cluster objects. Mock and triage are off.
+#
+# Namespace comes from the release (-n / ArgoCD destination), never a value.
+
+nameOverride: ""
+
+exporter:
+  image:
+    repository: pandora-exporter
+    tag: "0.1"
+    pullPolicy: IfNotPresent
+  # Pandora session cookies are not shareable between processes, so this is a
+  # singleton: two replicas would fight over the same session. Recreate avoids
+  # a second pod existing even briefly during a rollout.
+  resources:
+    requests:
+      cpu: 20m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+  # Extra environment variables, if you need something not modelled below.
+  extraEnv: []
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+pandora:
+  host: pro.p-on.ru
+  scheme: https
+  # Login endpoint tuning — the cabinet has no public API, so these exist to
+  # absorb a UI change without a code change.
+  loginPath: /api/users/login
+  loginField: login
+  loginFormat: json
+  # Comma-separated allowlist; empty exports every visible device.
+  deviceIds: ""
+  pollIntervalSeconds: 10
+  logLevel: INFO
+
+  # Credentials. Prefer existingSecret and keep them out of Git entirely
+  # (Vault, sealed-secrets, SOPS). The inline values are only a convenience
+  # for a scratch cluster and must stay placeholders in this file.
+  existingSecret: ""
+  login: REPLACE_WITH_PANDORA_LOGIN
+  password: REPLACE_WITH_PANDORA_PASSWORD
+
+service:
+  port: 9180
+
+# Cabinet events (door opened, engine stopped) shipped to Loki as log lines.
+# Empty url disables the path entirely; the exporter then only does metrics.
+loki:
+  url: ""
+  # Which /api/updates key holds the feed. The exporter logs the keys it
+  # actually received on its first poll, so this is a one-value change.
+  eventsKey: lenta
+  job: pandora
+
+# ServiceMonitor for the Prometheus Operator. Without the operator, disable it
+# and use deploy/prometheus-scrape.yml instead.
+serviceMonitor:
+  enabled: true
+  interval: 15s
+  # Label your Prometheus instance selects on — `release: prometheus` matches a
+  # default kube-prometheus-stack install.
+  labels:
+    release: prometheus
+
+# The 10 alert rules, rendered as a PrometheusRule from the same file the
+# Compose stack and the promtool tests use.
+prometheusRule:
+  enabled: true
+  labels: {}
+
+# The dashboard as a ConfigMap for the Grafana sidecar to pick up.
+dashboard:
+  enabled: true
+  # Label the Grafana sidecar watches for.
+  label: grafana_dashboard
+  labelValue: "1"
+  folderAnnotation: grafana_folder
+  folder: Pandora
+
+# Mock cabinet — the same demo path as `--profile demo` in Compose. Lets the
+# chart be deployed to a scratch cluster with no vehicle and no credentials.
+mock:
+  enabled: false
+  image:
+    repository: mock-pandora
+    tag: "0.1"
+    pullPolicy: IfNotPresent
+  deviceIds: "1234567890"
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 50m
+      memory: 64Mi
+
+# AI alert-triage agent — Alertmanager webhook → Claude → diagnosis.
+triage:
+  enabled: false
+  image:
+    repository: alert-triage
+    tag: "0.1"
+    pullPolicy: IfNotPresent
+  prometheusUrl: http://prometheus-operated.monitoring.svc:9090
+  lokiUrl: http://loki.monitoring.svc:3100
+  model: claude-opus-5
+  effort: medium
+  port: 9099
+  # Bring your own Secret holding ANTHROPIC_API_KEY (and optionally
+  # TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID). Leave empty and the chart creates
+  # one from the values below — placeholders only.
+  existingSecret: ""
+  anthropicApiKey: REPLACE_WITH_ANTHROPIC_API_KEY
+  telegramBotToken: ""
+  telegramChatId: ""
+  resources:
+    requests:
+      cpu: 20m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 512Mi
