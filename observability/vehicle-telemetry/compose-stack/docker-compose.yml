@@ -100,10 +100,10 @@ services:
       - '--storage.path=/alertmanager'
     volumes:
       - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      # Alertmanager does not expand env vars in its config, so the Telegram
+      # token arrives as a file it reads via bot_token_file.
+      - ./secrets:/etc/alertmanager/secrets:ro
       - alertmanager-data:/alertmanager
-    environment:
-      TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN:-}"
-      TELEGRAM_CHAT_ID: "${TELEGRAM_CHAT_ID:-}"
     ports:
       - "127.0.0.1:9093:9093"
     networks:

@@ -95,9 +95,24 @@ Three ways out, all in [`alertmanager/alertmanager.yml`](alertmanager/alertmanag
 
 - **`triage`** — already defined; point `route.receiver` at it and run `--profile triage`
   to get an AI diagnosis instead of a raw alert.
-- **`telegram`** — uncomment the block, set `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` in
-  `.env`, point `route.receiver` at it. Create the bot via [@BotFather](https://t.me/BotFather);
-  get the chat ID from `https://api.telegram.org/bot<TOKEN>/getUpdates`.
+- **`telegram`** — raw alerts straight to a chat. Create the bot via
+  [@BotFather](https://t.me/BotFather), then:
+
+  ```bash
+  printf '%s' '<token>' > secrets/telegram-token     # gitignored
+  ```
+
+  Uncomment the receiver, replace `REPLACE_WITH_CHAT_ID` (get it from
+  `https://api.telegram.org/bot<TOKEN>/getUpdates` after messaging your bot), and point
+  `route.receiver` at `telegram`.
+
+  > [!WARNING]
+  > **Alertmanager does not expand environment variables in its config.** A
+  > `bot_token: '${TELEGRAM_BOT_TOKEN}'` is sent to Telegram as that literal string —
+  > the outgoing request path becomes `/bot$%7BTELEGRAM_BOT_TOKEN%7D/sendMessage`. That
+  > is why the token comes from `bot_token_file` and the chat id is written in plainly.
+  > The triage agent is different: it reads its own env vars in Python, so `.env` works
+  > there.
 - **`null`** — keep discarding, and read alerts in the Alertmanager UI.
 
 Restart Alertmanager after editing: `docker compose restart alertmanager`.
