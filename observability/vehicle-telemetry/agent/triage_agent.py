@@ -14,6 +14,12 @@ Prometheus and Loki and it triages whatever alerts you send it.
 The agent loop is written out by hand rather than using the SDK's (beta) tool
 runner: it is the part worth reading, it pins the tool surface to a read-only
 allowlist, and it keeps this file on the stable, non-beta Messages API.
+
+The model itself is pluggable. TRIAGE_BACKEND=anthropic is the default; set it
+to `openai` and point TRIAGE_BASE_URL at anything speaking the OpenAI
+chat-completions shape — Ollama, vLLM, llama.cpp's server, LM Studio — and the
+same loop runs against a model on your own hardware. The loop is shared; each
+backend only translates its own wire format to and from the neutral Turn below.
 """
 
 from __future__ import annotations
@@ -23,20 +29,36 @@ import logging
 import os
 import sys
 import time
+from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
-import anthropic
 import requests
 
 # ── Config (env vars) ───────────────────────────────────────────────
 PORT = int(os.environ.get("TRIAGE_PORT", "9099"))
 PROMETHEUS_URL = os.environ.get("PROMETHEUS_URL", "http://prometheus:9090")
 LOKI_URL = os.environ.get("LOKI_URL", "http://loki:3100")
-MODEL = os.environ.get("TRIAGE_MODEL", "claude-opus-5")
 EFFORT = os.environ.get("TRIAGE_EFFORT", "medium")
 MAX_TOOL_ROUNDS = int(os.environ.get("TRIAGE_MAX_TOOL_ROUNDS", "8"))
+# A model that answers without ever querying anything has produced a guess, not
+# a diagnosis. Observed with small local models, which will happily invent
+# plausible query output. Marks such an answer instead of passing it off.
+FLAG_UNSOURCED = os.environ.get("TRIAGE_FLAG_UNSOURCED", "1") not in ("0", "false", "no")
 HTTP_TIMEOUT = int(os.environ.get("TRIAGE_HTTP_TIMEOUT", "15"))
+
+# ── Model backend ───────────────────────────────────────────────────
+# `anthropic` talks to the Claude API. `openai` talks to anything exposing the
+# OpenAI chat-completions shape, which is how you reach a model running on your
+# own hardware (Ollama, vLLM, llama.cpp server, LM Studio).
+BACKEND = os.environ.get("TRIAGE_BACKEND", "anthropic").lower()
+BASE_URL = os.environ.get("TRIAGE_BASE_URL", "http://ollama:11434/v1").rstrip("/")
+BACKEND_API_KEY = os.environ.get("TRIAGE_API_KEY", "not-needed")
+_DEFAULT_MODEL = "claude-opus-5" if BACKEND == "anthropic" else "qwen2.5:7b-instruct"
+MODEL = os.environ.get("TRIAGE_MODEL", _DEFAULT_MODEL)
+# A local 7B on CPU answers in minutes, not seconds. This is the ceiling for
+# one model call, separate from the short timeout used for PromQL and LogQL.
+MODEL_TIMEOUT = int(os.environ.get("TRIAGE_MODEL_TIMEOUT", "900"))
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
@@ -47,11 +69,13 @@ logging.basicConfig(
 )
 log = logging.getLogger("triage")
 
-if not os.environ.get("ANTHROPIC_API_KEY"):
-    sys.stderr.write("ERROR: set ANTHROPIC_API_KEY\n")
+if BACKEND not in ("anthropic", "openai"):
+    sys.stderr.write(f"ERROR: TRIAGE_BACKEND must be 'anthropic' or 'openai', got {BACKEND!r}\n")
     sys.exit(2)
 
-client = anthropic.Anthropic()
+if BACKEND == "anthropic" and not os.environ.get("ANTHROPIC_API_KEY"):
+    sys.stderr.write("ERROR: set ANTHROPIC_API_KEY (or TRIAGE_BACKEND=openai)\n")
+    sys.exit(2)
 
 SYSTEM_PROMPT = """\
 You are an on-call engineer triaging a single Prometheus alert.
@@ -224,6 +248,168 @@ DISPATCH = {
 }
 
 
+
+# ── Model backends ──────────────────────────────────────────────────
+# Both backends expose the same three calls, so the triage loop below never
+# learns which one it is talking to. Each keeps the conversation in its own
+# native shape and hands back a neutral Turn.
+
+@dataclass
+class ToolCall:
+    id: str
+    name: str
+    arguments: dict[str, Any]
+
+
+@dataclass
+class Turn:
+    """One model reply, normalised across backends."""
+
+    text: str = ""
+    tool_calls: list[ToolCall] = field(default_factory=list)
+    refused: bool = False
+
+
+class AnthropicBackend:
+    """Claude via the Messages API."""
+
+    name = "anthropic"
+
+    def __init__(self) -> None:
+        import anthropic
+
+        self._client = anthropic.Anthropic()
+        self._messages: list[dict[str, Any]] = []
+
+    def start(self, prompt: str) -> None:
+        self._messages = [{"role": "user", "content": prompt}]
+
+    def send(self) -> Turn:
+        response = self._client.messages.create(
+            model=MODEL,
+            max_tokens=8192,
+            system=SYSTEM_PROMPT,
+            thinking={"type": "adaptive"},
+            output_config={"effort": EFFORT},
+            tools=TOOLS,
+            messages=self._messages,
+        )
+
+        if response.stop_reason == "refusal":
+            return Turn(refused=True)
+
+        self._messages.append({"role": "assistant", "content": response.content})
+        return Turn(
+            text="".join(b.text for b in response.content if b.type == "text").strip(),
+            tool_calls=[
+                ToolCall(id=b.id, name=b.name, arguments=b.input)
+                for b in response.content
+                if b.type == "tool_use"
+            ],
+        )
+
+    def record_results(self, results: list[tuple[ToolCall, str, bool]]) -> None:
+        self._messages.append(
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": call.id,
+                        "content": output,
+                        "is_error": failed,
+                    }
+                    for call, output, failed in results
+                ],
+            }
+        )
+
+
+class OpenAICompatBackend:
+    """Any server speaking OpenAI chat-completions — Ollama, vLLM, llama.cpp.
+
+    Deliberately plain `requests` rather than the openai SDK: the surface used
+    here is a single POST, and the agent image stays small enough to be
+    comfortable on a Raspberry Pi.
+    """
+
+    name = "openai"
+
+    def __init__(self) -> None:
+        self._session = requests.Session()
+        self._session.headers.update({"Authorization": f"Bearer {BACKEND_API_KEY}"})
+        self._messages: list[dict[str, Any]] = []
+        self._tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": t["name"],
+                    "description": t["description"],
+                    "parameters": t["input_schema"],
+                },
+            }
+            for t in TOOLS
+        ]
+
+    def start(self, prompt: str) -> None:
+        self._messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ]
+
+    def send(self) -> Turn:
+        r = self._session.post(
+            f"{BASE_URL}/chat/completions",
+            json={
+                "model": MODEL,
+                "messages": self._messages,
+                "tools": self._tools,
+                "stream": False,
+            },
+            timeout=MODEL_TIMEOUT,
+        )
+        if r.status_code >= 400:
+            # Small local models often lack tool support. Say so, rather than
+            # surfacing a bare 400 from the inference server.
+            raise RuntimeError(
+                f"{BASE_URL} returned {r.status_code}: {r.text[:300]} "
+                "(does this model support tool calling?)"
+            )
+
+        message = r.json()["choices"][0]["message"]
+        self._messages.append(message)
+
+        calls = []
+        for call in message.get("tool_calls") or []:
+            fn = call.get("function", {})
+            raw = fn.get("arguments") or "{}"
+            # The spec says arguments is a JSON string; some servers already
+            # send an object.
+            try:
+                args = raw if isinstance(raw, dict) else json.loads(raw)
+            except ValueError:
+                args = {}
+            calls.append(
+                ToolCall(id=call.get("id", ""), name=fn.get("name", ""), arguments=args)
+            )
+
+        return Turn(text=(message.get("content") or "").strip(), tool_calls=calls)
+
+    def record_results(self, results: list[tuple[ToolCall, str, bool]]) -> None:
+        for call, output, failed in results:
+            self._messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": call.id,
+                    "content": f"ERROR: {output}" if failed else output,
+                }
+            )
+
+
+def make_backend():
+    return AnthropicBackend() if BACKEND == "anthropic" else OpenAICompatBackend()
+
+
 # ── Agent loop ──────────────────────────────────────────────────────
 def describe_alert(alert: dict[str, Any]) -> str:
     labels = alert.get("labels", {})
@@ -241,61 +427,48 @@ def describe_alert(alert: dict[str, Any]) -> str:
 
 
 def triage(alert: dict[str, Any]) -> str:
-    messages: list[dict[str, Any]] = [
-        {
-            "role": "user",
-            "content": (
-                "This alert just fired. Investigate it and report back.\n\n"
-                f"{describe_alert(alert)}"
-            ),
-        }
-    ]
+    backend = make_backend()
+    backend.start(
+        "This alert just fired. Investigate it and report back.\n\n"
+        f"{describe_alert(alert)}"
+    )
+
+    queries_run = 0
 
     for round_no in range(MAX_TOOL_ROUNDS):
-        response = client.messages.create(
-            model=MODEL,
-            max_tokens=8192,
-            system=SYSTEM_PROMPT,
-            thinking={"type": "adaptive"},
-            output_config={"effort": EFFORT},
-            tools=TOOLS,
-            messages=messages,
-        )
+        turn = backend.send()
 
-        if response.stop_reason == "refusal":
+        if turn.refused:
             return "Model declined to answer this alert."
 
-        if response.stop_reason != "tool_use":
-            return "".join(
-                block.text for block in response.content if block.type == "text"
-            ).strip()
-
-        messages.append({"role": "assistant", "content": response.content})
+        if not turn.tool_calls:
+            if queries_run == 0 and FLAG_UNSOURCED:
+                log.warning(
+                    "model answered without querying anything — reporting it as unsourced"
+                )
+                return (
+                    f"{turn.text}\n\n"
+                    "⚠ Unsourced: the model answered without running a single query, "
+                    "so nothing above is backed by data from this stack. Treat it as a "
+                    "guess. Small local models do this — try a larger, tool-capable one."
+                )
+            return turn.text
 
         results = []
-        for block in response.content:
-            if block.type != "tool_use":
-                continue
-            handler = DISPATCH.get(block.name)
-            log.info("round %d: %s(%s)", round_no + 1, block.name, block.input)
+        for call in turn.tool_calls:
+            handler = DISPATCH.get(call.name)
+            log.info("round %d: %s(%s)", round_no + 1, call.name, call.arguments)
             try:
                 if handler is None:
-                    raise ValueError(f"unknown tool {block.name}")
-                output = handler(**block.input)
-                is_error = False
+                    raise ValueError(f"unknown tool {call.name}")
+                output, failed = handler(**call.arguments), False
             except Exception as exc:  # surfaced to the model so it can adapt
-                output, is_error = f"{type(exc).__name__}: {exc}", True
-                log.warning("tool %s failed: %s", block.name, exc)
-            results.append(
-                {
-                    "type": "tool_result",
-                    "tool_use_id": block.id,
-                    "content": output,
-                    "is_error": is_error,
-                }
-            )
+                output, failed = f"{type(exc).__name__}: {exc}", True
+                log.warning("tool %s failed: %s", call.name, exc)
+            results.append((call, output, failed))
+            queries_run += 1
 
-        messages.append({"role": "user", "content": results})
+        backend.record_results(results)
 
     return "Gave up after the tool-call budget was exhausted without a conclusion."
 
@@ -336,7 +509,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802 — BaseHTTPRequestHandler API
         if self.path in ("/", "/healthz"):
-            self._respond(200, {"status": "ok", "model": MODEL})
+            self._respond(200, {"status": "ok", "backend": BACKEND, "model": MODEL})
         else:
             self._respond(404, {"error": "not found"})
 
@@ -370,9 +543,11 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
+    where = "Claude API" if BACKEND == "anthropic" else BASE_URL
     log.info(
-        "alert-triage listening on :%d (model=%s, effort=%s, prometheus=%s, loki=%s)",
-        PORT, MODEL, EFFORT, PROMETHEUS_URL, LOKI_URL,
+        "alert-triage listening on :%d (backend=%s via %s, model=%s, "
+        "prometheus=%s, loki=%s)",
+        PORT, BACKEND, where, MODEL, PROMETHEUS_URL, LOKI_URL,
     )
     ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
 
