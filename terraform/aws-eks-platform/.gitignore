@@ -1,0 +1,28 @@
+# --- Terraform ---
+# Local .terraform working dirs
+**/.terraform/*
+
+# State — NEVER commit (contains all resource attributes in plaintext)
+*.tfstate
+*.tfstate.*
+tfstate_backups/
+
+# Crash / log files
+crash.log
+crash.*.log
+
+# Real variable values — commit only the *.example templates
+*.tfvars
+*.tfvars.json
+secrets.auto.tfvars
+!*.tfvars.example
+
+# Override files
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# CLI config / credentials
+.terraformrc
+terraform.rc

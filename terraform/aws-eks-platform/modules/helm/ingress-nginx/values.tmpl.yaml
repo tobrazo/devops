@@ -1,0 +1,23 @@
+controller:
+  metrics:
+    enabled: true
+    serviceMonitor:
+###    
+      #enabled: false
+      #additionalLabels:
+        #release: "prometheus"
+## 
+
+      enabled: true
+      additionalLabels:
+        release: "prometheus"
+
+  service:
+    annotations:
+      service.beta.kubernetes.io/aws-load-balancer-type: "external"
+      service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+      service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: "ip"
+      service.beta.kubernetes.io/aws-load-balancer-eip-allocations: '${join(",", eip_alloc_ips)}'
+
+
+

@@ -1,0 +1,23 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "cloudwatch:GetMetricData",
+        "cloudwatch:GetMetricStatistics",
+        "cloudwatch:ListMetrics",
+        "logs:DescribeLogGroups",
+        "logs:GetLogEvents",
+        "logs:DescribeLogStreams",
+        "logs:FilterLogEvents",
+        "ce:GetCostAndUsage",
+        "ce:GetCostForecast",
+        "ce:GetReservationUtilization",
+        "ce:GetSavingsPlansUtilization",
+        "aws-portal:ViewBilling"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

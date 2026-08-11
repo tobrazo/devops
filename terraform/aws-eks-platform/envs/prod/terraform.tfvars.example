@@ -1,0 +1,13 @@
+# Copy to terraform.tfvars and fill in your values.
+# terraform.tfvars is gitignored — never commit it.
+
+region = "eu-central-1"
+
+# IAM Role/User ARN granted cluster-admin via EKS Access Entries.
+admin_role_arn = "arn:aws:iam::000000000000:role/your-admin-role"
+
+# ACME registration email for cert-manager.
+cert_manager_email = "admin@example.com"
+
+# Render the post-install Kubernetes manifests (ArgoCD root app, issuers, ...).
+enable_k8s_post = true

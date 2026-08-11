@@ -1,0 +1,99 @@
+server:
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    hostname: ${hostname}
+    annotations:
+      kubernetes.io/ingress.class: nginx
+%{ if enable_tls ~}
+      cert-manager.io/cluster-issuer: "${cluster_issuer}"
+    tls:
+      - hosts:
+          - ${hostname}
+        secretName: ${tls_secret_name}
+%{ endif ~}
+
+configs:
+  cm:
+    admin.enabled: "true"
+    url: https://${hostname}
+
+# Allow exec (kubectl exec / logs) in ArgoCD UI & CLI
+    exec.enabled: "true"
+
+# Add dedicated user 'devops' with login and token support
+    accounts.devops: apiKey,login
+    accounts.devops.enabled: "true"
+
+  params:
+    server.insecure: true
+
+
+# RBAC rules for user 'devops'
+  rbac:
+    policy.default: role:readonly
+    policy.csv: |
+      p, role:devops, applications, *, */*, allow
+      p, role:devops, clusters, get, *, allow
+      p, role:devops, repositories, get, *, allow
+      p, role:devops, logs, get, *, allow
+      g, devops, role:devops
+
+notifications:
+  enabled: true
+  argocdUrl: "https://${hostname}"
+
+  secret:
+    create: true
+    items:
+      slack-webhook: "${slack_webhook_url}"
+
+  notifiers:
+    service.slack: |
+      webhook: $slack-webhook
+
+  templates:
+    slack-rich: |
+      message: |
+        {
+          "username": "ArgoCD Bot",
+          "icon_emoji": ":rocket:",
+          "attachments": [
+            {
+              "color": "{{ if eq .app.status.operationState.phase \"Failed\" }}#ff0000{{ else if eq .app.status.health.status \"Degraded\" }}#ffcc00{{ else }}#36a64f{{ end }}",
+              "title": "🚀 Deployment Notification: *{{.app.metadata.name}}*",
+              "title_link": "https://${hostname}/applications/{{.app.metadata.name}}",
+              "text": "*Status:* {{.app.status.sync.status}} | *Health:* {{.app.status.health.status}}",
+              "fields": [
+                { "title": "Project",     "value": "{{.app.spec.project}}",                        "short": true },
+                { "title": "Namespace",   "value": "{{.app.spec.destination.namespace}}",          "short": true },
+                { "title": "Cluster",     "value": "{{.app.spec.destination.server}}",             "short": false },
+                { "title": "Revision",    "value": "{{.app.status.sync.revision}}",                "short": false },
+                { "title": "Repository",  "value": "{{.app.spec.source.repoURL}}",                 "short": false },
+                { "title": "Environment", "value": "{{ index .app.metadata.annotations \"environment\" | default \"unknown\" }}", "short": true }
+              ],
+              "footer": "ArgoCD GitOps",
+              "ts": {{.unixTime}}
+            }
+          ]
+        }
+
+  triggers:
+    on-deployed: |
+      - description: Application is synced and healthy. Triggered once per commit.
+        oncePer: app.status.sync.revision
+        send:
+          - slack-rich
+        when: app.status.operationState.phase in ['Succeeded'] and app.status.health.status == 'Healthy'
+
+    on-sync-failed: |
+      - description: Application sync failed.
+        send:
+          - slack-rich
+        when: app.status.operationState.phase in ['Failed']
+
+    on-health-degraded: |
+      - description: Application health is degraded.
+        send:
+          - slack-rich
+        when: app.status.health.status in ['Degraded']
