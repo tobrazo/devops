@@ -102,7 +102,7 @@ jobs:
           count=$(curl -sf localhost:9090/api/v1/rules \
             | jq '[.data.groups[] | select(.name=="pandora-vehicle.rules") | .rules[]] | length')
           echo "loaded $count rules from pandora-vehicle.rules"
-          [ "$count" -eq 9 ] || { echo "::error::expected 9 rules, got $count"; exit 1; }
+          [ "$count" -eq 10 ] || { echo "::error::expected 10 rules, got $count"; exit 1; }
 
       - name: grafana provisioned the dashboard
         run: |
