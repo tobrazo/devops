@@ -1,0 +1,106 @@
+groups:
+  - name: pandora-vehicle.rules
+    interval: 30s
+    rules:
+
+      # ── Connectivity ────────────────────────────────────────────
+      - alert: PandoraDeviceOffline
+        expr: pandora_online == 0
+        for: 10m
+        labels:
+          severity: warning
+          source: pandora
+        annotations:
+          summary: "Pandora device {{ $labels.device_id }} offline >10min"
+          description: |
+            Pandora module has lost GSM/server connection for over 10 minutes.
+            Could be underground parking, jammer, or pulled fuse.
+
+      - alert: PandoraExporterStalled
+        expr: time() - pandora_exporter_last_poll_ts > 120
+        for: 2m
+        labels:
+          severity: critical
+          source: pandora-exporter
+        annotations:
+          summary: "Pandora exporter hasn't polled in 2min"
+          description: "Exporter process may be hung or unable to reach Pandora API."
+
+      # ── Battery / electrics ─────────────────────────────────────
+      - alert: PandoraLowBatteryVoltage
+        expr: pandora_voltage_v < 11.8 and pandora_engine_rpm == 0
+        for: 15m
+        labels:
+          severity: warning
+          source: pandora
+        annotations:
+          summary: "Battery voltage {{ $value | printf \"%.1f\" }}V (engine off)"
+          description: "Possible draining battery or parasitic load."
+
+      # ── Tires (TPMS) ────────────────────────────────────────────
+      - alert: PandoraTireLow
+        expr: pandora_tpms_atm < 1.8
+        for: 30m
+        labels:
+          severity: warning
+          source: pandora
+        annotations:
+          summary: "Tire {{ $labels.wheel }} at {{ $value | printf \"%.1f\" }} atm"
+          description: "Tire pressure below 1.8 atm — check for slow leak."
+
+      # ── Fuel / SIM ──────────────────────────────────────────────
+      - alert: PandoraSimLowBalance
+        expr: pandora_sim_balance < 50
+        for: 5m
+        labels:
+          severity: warning
+          source: pandora
+        annotations:
+          summary: "Pandora SIM ({{ $labels.phone }}) balance {{ $value }} {{ $labels.currency }}"
+          description: "Top up the SIM in Pandora module — SMS notifications may stop."
+
+      - alert: PandoraFuelLow
+        expr: pandora_fuel_percent < 10 and pandora_fuel_percent > 0
+        for: 5m
+        labels:
+          severity: info
+          source: pandora
+        annotations:
+          summary: "Fuel level {{ $value }}%"
+          description: "Less than 10% fuel remaining."
+
+      # ── Movement / security ─────────────────────────────────────
+      # Recent settings change — useful to catch unexpected config edits
+      - alert: PandoraSettingsChangedRecently
+        expr: time() - pandora_last_setting_ts < 300
+        for: 1m
+        labels:
+          severity: info
+          source: pandora
+        annotations:
+          summary: "Settings changed on device {{ $labels.device_id }}"
+          description: |
+            Someone modified Pandora settings less than 5 minutes ago.
+            If it wasn't you — investigate the cabinet log.
+
+      # Unusual high-mileage burst — useful when car is loaned out
+      - alert: PandoraHighMileageBurst
+        expr: increase(pandora_mileage_can_km[1h]) > 80
+        for: 1m
+        labels:
+          severity: info
+          source: pandora
+        annotations:
+          summary: "Car drove {{ $value | printf \"%.0f\" }} km in last hour"
+          description: "Unusual for city use — long trip or highway run."
+
+      # ── Engine ──────────────────────────────────────────────────
+      - alert: PandoraEngineOverheat
+        expr: pandora_engine_temp_c > 105
+        for: 2m
+        labels:
+          severity: critical
+          source: pandora
+        annotations:
+          summary: "Engine temperature {{ $value }}°C"
+          description: "Engine overheating — risk of damage. Call driver immediately."

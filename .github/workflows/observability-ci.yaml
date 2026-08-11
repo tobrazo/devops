@@ -1,0 +1,128 @@
+name: observability-ci
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'observability/**'
+      - 'mcp/**'
+      - '.github/workflows/observability-ci.yaml'
+  pull_request:
+    paths:
+      - 'observability/**'
+      - 'mcp/**'
+      - '.github/workflows/observability-ci.yaml'
+
+env:
+  PROM_IMAGE: prom/prometheus:v2.55.1
+  STACK: observability/vehicle-telemetry/compose-stack
+
+jobs:
+
+  alert-rules:
+    name: promtool check + unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: promtool check rules
+        working-directory: observability/vehicle-telemetry/alerts
+        run: |
+          docker run --rm --entrypoint promtool -v "$PWD":/w -w /w \
+            "$PROM_IMAGE" check rules pandora-rules.yml
+
+      - name: promtool test rules
+        working-directory: observability/vehicle-telemetry/alerts
+        run: |
+          docker run --rm --entrypoint promtool -v "$PWD":/w -w /w \
+            "$PROM_IMAGE" test rules pandora-rules.test.yml
+
+  python:
+    name: python syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: compile every module
+        run: |
+          python -m compileall -q \
+            observability/vehicle-telemetry/exporter \
+            observability/vehicle-telemetry/mock \
+            observability/vehicle-telemetry/agent \
+            mcp/observability-ops \
+            mcp/ansible-ops \
+            python
+
+  stack:
+    name: demo stack comes up and collects
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: compose config is valid
+        working-directory: ${{ env.STACK }}
+        run: docker compose --env-file .env.demo --profile demo config -q
+
+      - name: bring the stack up against the mock cabinet
+        working-directory: ${{ env.STACK }}
+        run: docker compose --env-file .env.demo --profile demo up -d --build
+
+      - name: exporter is producing telemetry
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf localhost:9180/metrics | grep -q '^pandora_online.* 1'; then
+              echo "exporter is up and reporting a device online"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "::error::exporter never reported pandora_online=1"
+          exit 1
+
+      - name: prometheus scrapes the exporter
+        run: |
+          for i in $(seq 1 30); do
+            health=$(curl -sf 'localhost:9090/api/v1/targets?state=active' \
+              | jq -r '.data.activeTargets[] | select(.labels.job=="pandora-exporter") | .health')
+            if [ "$health" = "up" ]; then
+              echo "prometheus target pandora-exporter is UP"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "::error::prometheus target pandora-exporter never became healthy"
+          exit 1
+
+      - name: alert rules are loaded
+        run: |
+          count=$(curl -sf localhost:9090/api/v1/rules \
+            | jq '[.data.groups[] | select(.name=="pandora-vehicle.rules") | .rules[]] | length')
+          echo "loaded $count rules from pandora-vehicle.rules"
+          [ "$count" -eq 9 ] || { echo "::error::expected 9 rules, got $count"; exit 1; }
+
+      - name: grafana provisioned the dashboard
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf -u "admin:demo" \
+                 'localhost:3000/api/dashboards/uid/pandora-vehicle' >/dev/null; then
+              echo "grafana served dashboard uid=pandora-vehicle"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "::error::grafana never served the provisioned dashboard"
+          exit 1
+
+      - name: dump logs on failure
+        if: failure()
+        working-directory: ${{ env.STACK }}
+        run: docker compose --env-file .env.demo --profile demo logs --tail=100
+
+      - name: tear down
+        if: always()
+        working-directory: ${{ env.STACK }}
+        run: docker compose --env-file .env.demo --profile demo down -v

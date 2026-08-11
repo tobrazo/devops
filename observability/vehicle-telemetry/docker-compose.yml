@@ -1,0 +1,25 @@
+# Exporter on its own — scrape it from a Prometheus you already run.
+# For the whole batteries-included stack see compose-stack/.
+services:
+  pandora-exporter:
+    build: ./exporter
+    image: pandora-exporter:0.1
+    container_name: pandora-exporter
+    restart: unless-stopped
+    environment:
+      # Required
+      PANDORA_LOGIN: "${PANDORA_LOGIN}"
+      PANDORA_PASSWORD: "${PANDORA_PASSWORD}"
+      # Optional
+      PANDORA_HOST: "${PANDORA_HOST:-pro.p-on.ru}"   # p-on.ru for the consumer cabinet
+      PANDORA_DEVICE_IDS: "${PANDORA_DEVICE_IDS:-}"  # comma-separated; empty = all
+      POLL_INTERVAL_SEC: "${POLL_INTERVAL_SEC:-10}"
+      EXPORTER_PORT: "9180"
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+    ports:
+      - "127.0.0.1:9180:9180"   # bind to localhost only — /metrics carries lat/lon
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

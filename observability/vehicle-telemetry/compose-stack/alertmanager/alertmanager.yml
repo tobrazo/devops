@@ -1,0 +1,55 @@
+global:
+  resolve_timeout: 5m
+
+# Default receiver is 'null' (discards) so Alertmanager starts with no
+# credentials configured. Point route.receiver at 'telegram' for raw alerts,
+# or at 'triage' to route them through the AI triage agent instead.
+route:
+  receiver: 'null'
+  group_by: ['alertname', 'device_id']
+  group_wait: 10s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    - matchers:
+        - severity = "critical"
+      receiver: 'null'
+      group_wait: 0s
+      repeat_interval: 30m
+
+receivers:
+
+  - name: 'null'
+
+  # AI triage — the alert-triage service correlates Prometheus + Loki and
+  # sends a diagnosis instead of the raw alert. Requires `--profile triage`.
+  - name: triage
+    webhook_configs:
+      - url: 'http://alert-triage:9099/alerts'
+        send_resolved: false
+        max_alerts: 5
+
+  # Raw Telegram delivery. Set TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID in .env,
+  # uncomment the block below, and change route.receiver to 'telegram'.
+  #
+  # - name: telegram
+  #   telegram_configs:
+  #     - bot_token: '${TELEGRAM_BOT_TOKEN}'
+  #       chat_id: ${TELEGRAM_CHAT_ID}
+  #       api_url: 'https://api.telegram.org'
+  #       parse_mode: 'HTML'
+  #       message: |
+  #         {{ if eq .Status "firing" }}🚨{{ else }}✅{{ end }} <b>{{ .Status | toUpper }}</b>: {{ .CommonLabels.alertname }}
+  #         {{ range .Alerts }}
+  #         <b>Device:</b> {{ .Labels.device_id }}{{ if .Labels.wheel }} ({{ .Labels.wheel }}){{ end }}
+  #         <b>Severity:</b> {{ .Labels.severity }}
+  #         {{ .Annotations.summary }}
+  #         {{ if .Annotations.description }}<i>{{ .Annotations.description }}</i>{{ end }}
+  #         {{ end }}
+
+inhibit_rules:
+  - source_matchers:
+      - severity = "critical"
+    target_matchers:
+      - severity = "warning"
+    equal: ['alertname', 'device_id']

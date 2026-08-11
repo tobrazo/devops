@@ -1,0 +1,227 @@
+# Unit tests for pandora-rules.yml — run with:
+#   promtool test rules alerts/pandora-rules.test.yml
+#
+# Each test feeds a synthetic time series into the rule group and asserts both
+# that the alert does NOT fire before its `for:` window elapses and that it does
+# fire afterwards, with the exact labels and rendered annotations.
+
+rule_files:
+  - pandora-rules.yml
+
+evaluation_interval: 30s
+
+tests:
+
+  # ── Connectivity ────────────────────────────────────────────────
+  - interval: 1m
+    name: device goes offline and stays offline for 10 minutes
+    input_series:
+      - series: 'pandora_online{device_id="1234567890"}'
+        values: '1+0x5 0+0x25'          # online 0-5 min, offline from 6 min
+    alert_rule_test:
+      - eval_time: 10m                  # pending: only 4 min offline so far
+        alertname: PandoraDeviceOffline
+        exp_alerts: []
+      - eval_time: 17m                  # offline since 6m, for: 10m → fires at 16m
+        alertname: PandoraDeviceOffline
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              source: pandora
+              device_id: "1234567890"
+            exp_annotations:
+              summary: "Pandora device 1234567890 offline >10min"
+              description: |
+                Pandora module has lost GSM/server connection for over 10 minutes.
+                Could be underground parking, jammer, or pulled fuse.
+
+  - interval: 1m
+    name: exporter stops polling
+    input_series:
+      # Last successful poll pinned at t=0; time() advances, so the gap grows.
+      - series: 'pandora_exporter_last_poll_ts'
+        values: '0+0x20'
+    alert_rule_test:
+      - eval_time: 3m                   # gap > 120s only since 2m01s
+        alertname: PandoraExporterStalled
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: PandoraExporterStalled
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              source: pandora-exporter
+            exp_annotations:
+              summary: "Pandora exporter hasn't polled in 2min"
+              description: "Exporter process may be hung or unable to reach Pandora API."
+
+  # ── Battery / electrics ─────────────────────────────────────────
+  - interval: 1m
+    name: battery drains while the engine is off
+    input_series:
+      - series: 'pandora_voltage_v{device_id="1234567890"}'
+        values: '11.5+0x30'
+      - series: 'pandora_engine_rpm{device_id="1234567890"}'
+        values: '0+0x30'
+    alert_rule_test:
+      - eval_time: 10m                  # for: 15m not elapsed
+        alertname: PandoraLowBatteryVoltage
+        exp_alerts: []
+      - eval_time: 16m
+        alertname: PandoraLowBatteryVoltage
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              source: pandora
+              device_id: "1234567890"
+            exp_annotations:
+              summary: "Battery voltage 11.5V (engine off)"
+              description: "Possible draining battery or parasitic load."
+
+  - interval: 1m
+    name: low voltage with the engine running must not alert
+    input_series:
+      - series: 'pandora_voltage_v{device_id="1234567890"}'
+        values: '11.5+0x30'
+      - series: 'pandora_engine_rpm{device_id="1234567890"}'
+        values: '2000+0x30'
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: PandoraLowBatteryVoltage
+        exp_alerts: []
+
+  # ── Tires ───────────────────────────────────────────────────────
+  - interval: 1m
+    name: one tire slowly deflates
+    input_series:
+      - series: 'pandora_tpms_atm{device_id="1234567890",wheel="front_left"}'
+        values: '1.7+0x45'
+      - series: 'pandora_tpms_atm{device_id="1234567890",wheel="front_right"}'
+        values: '2.2+0x45'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: PandoraTireLow
+        exp_alerts: []
+      - eval_time: 31m
+        alertname: PandoraTireLow
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              source: pandora
+              device_id: "1234567890"
+              wheel: front_left
+            exp_annotations:
+              summary: "Tire front_left at 1.7 atm"
+              description: "Tire pressure below 1.8 atm — check for slow leak."
+
+  # ── Fuel / SIM ──────────────────────────────────────────────────
+  - interval: 1m
+    name: fuel drops below 10 percent
+    input_series:
+      - series: 'pandora_fuel_percent{device_id="1234567890"}'
+        values: '5+0x15'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: PandoraFuelLow
+        exp_alerts: []
+      - eval_time: 8m
+        alertname: PandoraFuelLow
+        exp_alerts:
+          - exp_labels:
+              severity: info
+              source: pandora
+              device_id: "1234567890"
+            exp_annotations:
+              summary: "Fuel level 5%"
+              description: "Less than 10% fuel remaining."
+
+  - interval: 1m
+    name: an empty fuel reading is a sensor fault, not low fuel
+    input_series:
+      - series: 'pandora_fuel_percent{device_id="1234567890"}'
+        values: '0+0x15'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: PandoraFuelLow
+        exp_alerts: []
+
+  - interval: 1m
+    name: SIM balance runs low
+    input_series:
+      - series: 'pandora_sim_balance{device_id="1234567890",currency="EUR",phone="+10000000000"}'
+        values: '25+0x15'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: PandoraSimLowBalance
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              source: pandora
+              device_id: "1234567890"
+              currency: EUR
+              phone: "+10000000000"
+            exp_annotations:
+              summary: "Pandora SIM (+10000000000) balance 25 EUR"
+              description: "Top up the SIM in Pandora module — SMS notifications may stop."
+
+  # ── Movement / security ─────────────────────────────────────────
+  - interval: 1m
+    name: cabinet settings changed in the last five minutes
+    input_series:
+      - series: 'pandora_last_setting_ts{device_id="1234567890"}'
+        values: '0+0x15'
+    alert_rule_test:
+      - eval_time: 3m                   # within the 5-minute window
+        alertname: PandoraSettingsChangedRecently
+        exp_alerts:
+          - exp_labels:
+              severity: info
+              source: pandora
+              device_id: "1234567890"
+            exp_annotations:
+              summary: "Settings changed on device 1234567890"
+              description: |
+                Someone modified Pandora settings less than 5 minutes ago.
+                If it wasn't you — investigate the cabinet log.
+      - eval_time: 8m                   # more than 5 minutes ago → resolved
+        alertname: PandoraSettingsChangedRecently
+        exp_alerts: []
+
+  - interval: 1m
+    name: unusual mileage burst while the car is loaned out
+    input_series:
+      # 2 km/min over an hour = 120 km in the last hour, well past the 80 km bar.
+      - series: 'pandora_mileage_can_km{device_id="1234567890"}'
+        values: '0+2x90'
+    alert_rule_test:
+      - eval_time: 70m
+        alertname: PandoraHighMileageBurst
+        exp_alerts:
+          - exp_labels:
+              severity: info
+              source: pandora
+              device_id: "1234567890"
+            exp_annotations:
+              summary: "Car drove 120 km in last hour"
+              description: "Unusual for city use — long trip or highway run."
+
+  # ── Engine ──────────────────────────────────────────────────────
+  - interval: 1m
+    name: engine overheats
+    input_series:
+      - series: 'pandora_engine_temp_c{device_id="1234567890"}'
+        values: '110+0x10'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: PandoraEngineOverheat
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: PandoraEngineOverheat
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              source: pandora
+              device_id: "1234567890"
+            exp_annotations:
+              summary: "Engine temperature 110°C"
+              description: "Engine overheating — risk of damage. Call driver immediately."

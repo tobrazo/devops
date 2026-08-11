@@ -11,7 +11,7 @@ This repo is a **public** template. Nothing traceable to a real company, and no 
 
 ```bash
 grep -rniE 'dop_v1|GOCSPX|AKIA[0-9A-Z]{16}|ghp_[0-9A-Za-z]{20}|xox[baprs]-|hvs\.[A-Za-z0-9]{6}|discord\.com/api/webhooks/[0-9]|BEGIN (RSA|EC|OPENSSH|PRIVATE)|[0-9]{1,3}(\.[0-9]{1,3}){3}|@(gmail|yahoo|outlook|proton|icloud)\.com' \
-  helm-charts gitops ansible terraform python README.md \
+  helm-charts gitops ansible terraform python mcp observability README.md \
   --include='*.yaml' --include='*.yml' --include='*.tpl' --include='*.js' --include='*.json' --include='*.md' --include='*.sh' --include='*.tf' --include='*.py' \
   2>/dev/null | grep -vE '0\.0\.0\.0|127\.0\.0\.1|10\.[0-9]|172\.1[6-9]|172\.2[0-9]|172\.3[01]|192\.168|example\.(com|org|net|internal)|kubernetes\.default' \
   || echo "CLEAN"

@@ -1,0 +1,194 @@
+# Full observability stack for vehicle telemetry.
+#
+# Services (always on):
+#   pandora-exporter  : collects metrics from the Pandora P-ON cabinet
+#   prometheus        : scrapes the exporter, evaluates alert rules
+#   alertmanager      : routes alerts
+#   loki + promtail   : container logs, queryable in Grafana
+#   grafana           : dashboards (auto-provisioned)
+#
+# Profiles (opt in):
+#   --profile demo    : mock-pandora, a fake cabinet — run the stack with no car
+#   --profile triage  : alert-triage, an AI agent that diagnoses firing alerts
+#
+# Usage:
+#   Demo:  docker compose --env-file .env.demo --profile demo up -d --build
+#   Real:  cp .env.example .env && $EDITOR .env && docker compose up -d --build
+#
+#   Grafana http://localhost:3000 · Prometheus :9090 · Alertmanager :9093
+
+# Explicit project name. Without it compose derives one from the directory
+# ("compose-stack"), which is generic enough to collide with an unrelated
+# stack's volumes on the same machine.
+name: vehicle-telemetry
+
+services:
+
+  # ─── Pandora exporter ─────────────────────────────────────────
+  pandora-exporter:
+    build:
+      context: ../exporter
+    image: pandora-exporter:0.1
+    restart: unless-stopped
+    environment:
+      PANDORA_LOGIN: "${PANDORA_LOGIN}"
+      PANDORA_PASSWORD: "${PANDORA_PASSWORD}"
+      PANDORA_HOST: "${PANDORA_HOST:-pro.p-on.ru}"
+      PANDORA_SCHEME: "${PANDORA_SCHEME:-https}"     # http only for the mock
+      PANDORA_LOGIN_PATH: "${PANDORA_LOGIN_PATH:-/api/users/login}"
+      PANDORA_LOGIN_FIELD: "${PANDORA_LOGIN_FIELD:-login}"
+      PANDORA_LOGIN_FORMAT: "${PANDORA_LOGIN_FORMAT:-json}"
+      PANDORA_DEVICE_IDS: "${PANDORA_DEVICE_IDS:-}"
+      POLL_INTERVAL_SEC: "${POLL_INTERVAL_SEC:-10}"
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+    ports:
+      - "127.0.0.1:9180:9180"   # bind to localhost only — has lat/lon!
+    networks:
+      - monitoring
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  # ─── Mock cabinet (demo profile) ──────────────────────────────
+  # Simulated telemetry so the stack runs end to end without a vehicle.
+  mock-pandora:
+    profiles: ["demo"]
+    build:
+      context: ../mock
+    image: mock-pandora:0.1
+    restart: unless-stopped
+    environment:
+      MOCK_DEVICE_IDS: "${PANDORA_DEVICE_IDS:-1234567890}"
+    networks:
+      - monitoring
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "2" }
+
+  # ─── Prometheus ───────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--storage.tsdb.retention.size=2GB'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../alerts:/etc/prometheus/rules:ro          # same rules as the k8s deploy
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    networks:
+      - monitoring
+    depends_on:
+      - pandora-exporter
+
+  # ─── Alertmanager ─────────────────────────────────────────────
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/alertmanager
+    environment:
+      TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN:-}"
+      TELEGRAM_CHAT_ID: "${TELEGRAM_CHAT_ID:-}"
+    ports:
+      - "127.0.0.1:9093:9093"
+    networks:
+      - monitoring
+
+  # ─── Alert-triage agent (triage profile) ──────────────────────
+  # Alertmanager webhook → Claude → correlates Prometheus + Loki → Telegram.
+  alert-triage:
+    profiles: ["triage"]
+    build:
+      context: ../agent
+    image: alert-triage:0.1
+    restart: unless-stopped
+    environment:
+      # Not marked required: compose interpolates every service, including ones
+      # outside the active profile. The agent exits with a clear error if unset.
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      PROMETHEUS_URL: "http://prometheus:9090"
+      LOKI_URL: "http://loki:3100"
+      TRIAGE_MODEL: "${TRIAGE_MODEL:-claude-opus-5}"
+      TRIAGE_EFFORT: "${TRIAGE_EFFORT:-medium}"
+      TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN:-}"
+      TELEGRAM_CHAT_ID: "${TELEGRAM_CHAT_ID:-}"
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+    ports:
+      - "127.0.0.1:9099:9099"
+    networks:
+      - monitoring
+    depends_on:
+      - prometheus
+      - loki
+
+  # ─── Loki (log store) ─────────────────────────────────────────
+  loki:
+    image: grafana/loki:2.9.8
+    restart: unless-stopped
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - loki-data:/loki
+    ports:
+      - "127.0.0.1:3100:3100"
+    networks:
+      - monitoring
+
+  # ─── Promtail (ships container logs into Loki) ────────────────
+  promtail:
+    image: grafana/promtail:2.9.8
+    restart: unless-stopped
+    command: -config.file=/etc/promtail/promtail.yml
+    volumes:
+      - ./promtail/promtail.yml:/etc/promtail/promtail.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro   # discovery + log read
+    networks:
+      - monitoring
+    depends_on:
+      - loki
+
+  # ─── Grafana ──────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:11.2.2
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: "${GRAFANA_USER:-admin}"
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_PASSWORD:?set GRAFANA_PASSWORD in .env}"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      # Off unless .env turns it on — .env.demo does, so the demo stack is
+      # viewable without credentials. Never enable this on a real deployment:
+      # the dashboard shows the vehicle's live position.
+      GF_AUTH_ANONYMOUS_ENABLED: "${GRAFANA_ANONYMOUS:-false}"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Viewer"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../dashboards:/var/lib/grafana/dashboards:ro   # shared with the k8s deploy
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3000:3000"
+    networks:
+      - monitoring
+    depends_on:
+      - prometheus
+      - loki
+
+networks:
+  monitoring:
+    driver: bridge
+
+volumes:
+  prometheus-data:
+  alertmanager-data:
+  grafana-data:
+  loki-data:

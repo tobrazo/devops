@@ -19,6 +19,8 @@ Helm charts · a full ArgoCD platform · Terraform · Ansible — all validated,
 ![Grafana Loki](https://img.shields.io/badge/Loki-logs-F46800?style=flat-square&logo=grafana&logoColor=white)
 ![Tempo](https://img.shields.io/badge/Tempo-traces-F46800?style=flat-square&logo=grafana&logoColor=white)
 ![helm lint](https://img.shields.io/badge/helm_lint-passing-3FB950?style=flat-square)
+![alert rule tests](https://img.shields.io/badge/promtool_test_rules-passing-3FB950?style=flat-square)
+![runnable demo](https://img.shields.io/badge/demo-runs_with_no_hardware-3FB950?style=flat-square)
 
 </div>
 
@@ -49,7 +51,9 @@ flowchart LR
 | 🧠 **[helm-charts/redis-stack-cluster](helm-charts/redis-stack-cluster)** | 6-node Redis Stack cluster (RediSearch + RedisJSON) — self-healing `nodes.conf` IP reconciliation, bootstrap Job, PDB, exporter, non-root securityContext, opt-in NetworkPolicy. |
 | 🟦🟩 **[helm-charts/argo-rollouts-blue-green](helm-charts/argo-rollouts-blue-green)** | Progressive delivery with **Argo Rollouts** — active/preview services, a working k6 pre-promotion gate, preview ingress, HPA/PDB, matching ArgoCD Application. Runs out of the box; toggles to a plain Deployment. |
 | 🐙 **[gitops/](gitops)** | A complete **ArgoCD app-of-apps platform**: metrics, logs, tracing, TLS/DNS, progressive delivery, secrets — plus a copy-me nginx blue/green workload. |
+| 🚗 **[observability/vehicle-telemetry](observability/vehicle-telemetry)** | A full **observability vertical slice**: exporter → 9 alert rules with promtool unit tests → 13-panel Grafana dashboard → Compose *and* Kubernetes deploys → an AI agent that triages firing alerts. Ships a mock data source, so `--profile demo` runs the whole stack with live data and no hardware. |
 | 🤖 **[mcp/ansible-ops](mcp/ansible-ops)** | An **MCP server** that turns an Ansible control node into 17 tools an AI assistant can call — playbooks with dry-run, vault, SSH, Docker and diagnostics. Hosts resolve from your inventory; a runnable example tree is included. |
+| 🔭 **[mcp/observability-ops](mcp/observability-ops)** | An **MCP server** over Prometheus / Loki / Alertmanager — 12 tools for PromQL, LogQL, alerts, targets, rules and silences. Read-only unless you opt in, so an assistant can investigate but not mute your paging. |
 
 ---
 
@@ -61,7 +65,8 @@ devops/
 ├── gitops/          → ArgoCD app-of-apps platform + nginx workload
 ├── terraform/       → Infrastructure as Code (cloud web server)
 ├── ansible/         → Configuration-management roles (redis · haproxy · exporters · etcd)
-├── mcp/             → MCP servers for AI-assisted ops (ansible-ops)
+├── observability/   → End-to-end monitoring slices (vehicle-telemetry)
+├── mcp/             → MCP servers for AI-assisted ops (ansible-ops · observability-ops)
 └── python/          → Tooling & scripts
 ```
 
@@ -99,6 +104,17 @@ kubectl apply -f gitops/clusters/prod/project-tobrazo.yaml
 kubectl apply -f gitops/clusters/prod/apps/platform-root.yaml
 kubectl apply -f gitops/clusters/prod/apps/workloads-root.yaml
 ```
+</details>
+
+<details>
+<summary><b>Vehicle-telemetry stack — runs with no hardware</b></summary>
+
+```bash
+cd observability/vehicle-telemetry/compose-stack
+docker compose --env-file .env.demo --profile demo up -d --build
+```
+Grafana on http://localhost:3000 — no login in demo mode, dashboard already provisioned,
+mock telemetry already flowing.
 </details>
 
 ---
