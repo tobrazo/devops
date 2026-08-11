@@ -8,7 +8,7 @@ Runs on your laptop in one command, with no vehicle and no credentials.
 
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python&logoColor=white)
 ![Prometheus](https://img.shields.io/badge/Prometheus-exporter_+_rules-E6522C?style=flat-square&logo=prometheus&logoColor=white)
-![Grafana](https://img.shields.io/badge/Grafana-13_panels-F46800?style=flat-square&logo=grafana&logoColor=white)
+![Grafana](https://img.shields.io/badge/Grafana-14_panels-F46800?style=flat-square&logo=grafana&logoColor=white)
 ![Loki](https://img.shields.io/badge/Loki-logs-F46800?style=flat-square&logo=grafana&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-compose_stack-2496ED?style=flat-square&logo=docker&logoColor=white)
 ![Kubernetes](https://img.shields.io/badge/Kubernetes-Deployment_+_ServiceMonitor-326CE5?style=flat-square&logo=kubernetes&logoColor=white)
@@ -59,13 +59,14 @@ flowchart LR
   prom["🔥 Prometheus<br/>+ 10 alert rules"]
   am["📣 Alertmanager"]
   agent["🔎 alert-triage<br/>(triage profile)"]
-  loki["📜 Loki ← Promtail"]
+  loki["📜 Loki<br/>events + container logs"]
   graf["📊 Grafana"]
   tg["💬 Telegram"]
 
   cab -.->|"session cookie<br/>GET /api/updates"| exp
   mock -->|same contract| exp
   exp -->|scrape 15s| prom
+  exp -->|"events → log lines"| loki
   prom --> am
   am -->|webhook| agent
   agent -->|"PromQL"| prom
@@ -104,7 +105,7 @@ vehicle-telemetry/
 ├── mock/              → fake cabinet, stdlib only — the demo profile
 ├── agent/             → alert-triage: Alertmanager webhook → Claude → diagnosis
 ├── alerts/            → 10 alert rules + 14 promtool unit tests
-├── dashboards/        → 13-panel Grafana dashboard (compose + k8s share it)
+├── dashboards/        → 14-panel Grafana dashboard (compose + k8s share it)
 ├── deploy/            → Secret + Deployment + Service + ServiceMonitor, scrape config
 ├── docker-compose.yml → just the exporter, for an existing Prometheus
 └── compose-stack/     → the whole stack: Prometheus · Alertmanager · Loki · Promtail · Grafana
@@ -117,7 +118,7 @@ deploy — one source of truth for rules and dashboards.
 
 ## 📈 Metrics
 
-24 metric families on `:9180/metrics`:
+26 metric families on `:9180/metrics`:
 
 | Metric | Type | Labels | Meaning |
 |---|---|---|---|
@@ -136,7 +137,48 @@ deploy — one source of truth for rules and dashboards.
 | `pandora_sim_balance` | gauge | `device_id`, `currency`, `phone` | SIM balance |
 | `pandora_last_seen_ts` / `pandora_last_command_ts` / `pandora_last_setting_ts` | gauge | `device_id` | Unix timestamps |
 | `pandora_poll_total` / `pandora_poll_errors_total` / `pandora_relogin_total` | counter | (`kind`) | Exporter self-monitoring |
+| `pandora_events_shipped_total` / `pandora_events_errors_total` | counter | `device_id` | Cabinet events pushed to Loki |
 | `pandora_exporter_last_poll_ts` | gauge | – | Freshness of the last good poll |
+
+---
+
+## 🧾 Two stores, because there are two kinds of data
+
+The cabinet emits two things, and only one of them is a metric.
+
+**Values** — speed, voltage, fuel — are numbers sampled over time. They belong in
+Prometheus, where you can chart them, take derivatives, and alert on thresholds.
+
+**Events** — *door opened*, *engine stopped*, *alarm disarmed from key fob* — are discrete
+records with text and identity. Forcing those into Prometheus would explode label
+cardinality and throw away the payload anyway. They go to **Loki** as log lines, labelled
+`{job="pandora", device_id, event_type}` with the record itself as the line:
+
+```logql
+{job="pandora", event_type="engine_start"}          # every start, across weeks
+{job="pandora"} |= "door"                           # anything door-related
+```
+
+![The cabinet event feed in Grafana](docs/events.png)
+
+That is one drive cycle read out of Loki: disarmed, door opened, engine started — then
+stopped, door, armed again. The result is an audit trail beside the graphs: you can see the
+voltage sag *and* read that a door opened two minutes earlier. Three consequences worth knowing:
+
+- **`pandora_last_setting_ts` was never a substitute.** That metric says *when* something
+  last changed; the feed says *what* changed.
+- **The alert-triage agent got smarter for free.** It already had a `loki_query` tool — it
+  simply sees more now, with no change to the agent at all.
+- **The feed's schema is not documented, so nothing depends on it.** The exporter ships each
+  record verbatim as the log line and only looks up two label values, each against a list of
+  plausible field names with a safe fallback. It handles both a flat list and a dict keyed by
+  device id, and de-duplicates by content hash so re-polling the same records ships them once.
+
+> [!NOTE]
+> `PANDORA_EVENTS_KEY` defaults to `lenta`, which is an educated guess rather than a verified
+> contract. On the first poll the exporter logs the payload keys it actually received —
+> `First /api/updates payload keys: [...]` — and warns if the configured key is missing. So
+> pointing it at a real cabinet is a one-variable change, the same way the login flow is.
 
 ---
 
@@ -155,6 +197,10 @@ deploy — one source of truth for rules and dashboards.
 | `POLL_INTERVAL_SEC` | – | `10` | Be polite — don't go below 5 |
 | `EXPORTER_PORT` | – | `9180` | Scrape port |
 | `LOG_LEVEL` | – | `INFO` | `WARNING` in production (see Security) |
+| `LOKI_URL` | – | *(unset)* | Set to enable event shipping; unset disables the whole path |
+| `PANDORA_EVENTS_KEY` | – | `lenta` | Which payload key holds the feed — see below |
+| `LOKI_JOB` | – | `pandora` | `job` label on shipped events |
+| `LOKI_TIMEOUT_SEC` | – | `10` | Push timeout |
 
 ---
 
@@ -203,7 +249,8 @@ compose stack, importable anywhere else. A `$device` template variable populates
 
 Six stat tiles (status, speed, fuel, battery, GSM, SIM balance) over time series for
 speed/RPM, TPMS per wheel, voltage and temperatures, fuel and range, hourly mileage delta,
-a geomap of the live GPS position, and a Loki logs panel with the stack's own container output.
+a geomap of the live GPS position, a **Vehicle events** panel reading the cabinet feed out of
+Loki for the selected device, and a Loki panel with the stack's own container output.
 
 ---
 
@@ -309,7 +356,6 @@ and is not a valid rule file.
 ## 🛣️ Roadmap
 
 - [ ] Use Pandora's WebSocket channel instead of polling
-- [ ] Ship the cabinet event feed (`lenta`) into Loki for a full vehicle audit trail
 - [ ] Multi-account support
 - [ ] OpenTelemetry traces around login / fetch
 

@@ -104,6 +104,21 @@ jobs:
           echo "loaded $count rules from pandora-vehicle.rules"
           [ "$count" -eq 10 ] || { echo "::error::expected 10 rules, got $count"; exit 1; }
 
+      - name: cabinet events reach loki
+        run: |
+          for i in $(seq 1 30); do
+            count=$(curl -sf --get 'http://localhost:3100/loki/api/v1/query_range' \
+              --data-urlencode 'query={job="pandora"}' --data-urlencode 'limit=50' \
+              | jq '[.data.result[].values[]] | length')
+            if [ "${count:-0}" -gt 0 ]; then
+              echo "loki holds $count vehicle events"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "::error::no cabinet events reached loki"
+          exit 1
+
       - name: grafana provisioned the dashboard
         run: |
           for i in $(seq 1 30); do
