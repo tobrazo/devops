@@ -126,10 +126,10 @@ resource "helm_release" "external_dns" {
 
 
 ########################################
-# ExternalDNS (frontend)
+# ExternalDNS (secondary zone)
 ########################################
-resource "helm_release" "external_dns_front" {
-  name             = "tf-external-dns-front"
+resource "helm_release" "external_dns_secondary" {
+  name             = "tf-external-dns-secondary"
   repository       = "https://kubernetes-sigs.github.io/external-dns/"
   chart            = "external-dns"
   namespace        = local.external_dns_namespace
@@ -147,7 +147,7 @@ resource "helm_release" "external_dns_front" {
 
   set {
     name  = "env[0].valueFrom.secretKeyRef.name"
-    value = kubernetes_secret.cloudflare_external_dns_front.metadata[0].name
+    value = kubernetes_secret.cloudflare_external_dns_secondary.metadata[0].name
   }
 
   set {
@@ -177,7 +177,7 @@ resource "helm_release" "external_dns_front" {
 
   set {
     name  = "txtPrefix"
-    value = "_external-dns-front."
+    value = "_external-dns-secondary."
   }
 
   set {
@@ -203,7 +203,7 @@ resource "helm_release" "external_dns_front" {
   depends_on = [
     module.eks,
     module.ingress_nginx,
-    kubernetes_secret.cloudflare_external_dns_front
+    kubernetes_secret.cloudflare_external_dns_secondary
   ]
 }
 

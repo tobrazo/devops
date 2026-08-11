@@ -17,9 +17,9 @@ locals {
   api_allow_cidrs = ["0.0.0.0/0"]
 
   # Cloudflare secrets from JSON vars
-  cloudflare_external_dns_secret       = jsondecode(var.cloudflare_external_dns_json)
-  cloudflare_cert_manager_secret       = jsondecode(var.cloudflare_cert_manager_json)
-  cloudflare_cert_manager_front_secret = jsondecode(var.cloudflare_cert_manager_front_json)
+  cloudflare_external_dns_secret           = jsondecode(var.cloudflare_external_dns_json)
+  cloudflare_cert_manager_secret           = jsondecode(var.cloudflare_cert_manager_json)
+  cloudflare_cert_manager_secondary_secret = jsondecode(var.cloudflare_cert_manager_secondary_json)
 
   # Kubernetes namespaces
   external_dns_namespace = "kube-system"
@@ -30,6 +30,6 @@ locals {
   argocd_hostname = "argocd.example.com"
 
   # Application secrets (decoded from JSON)
-  b2b_web_secret_map     = jsondecode(var.b2b_web_secrets_json)
-  nestjs_back_secret_map = jsondecode(var.nestjs_app_secrets_back_json)
+  web_app_secret_map = jsondecode(var.web_app_secrets_json)
+  backend_secret_map = jsondecode(var.backend_secrets_json)
 }

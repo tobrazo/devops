@@ -41,7 +41,7 @@ resource "kubernetes_manifest" "letsencrypt_cluster_issuer" {
             dns01 = {
               cloudflare = {
                 apiTokenSecretRef = {
-                  name = kubernetes_secret.cloudflare_cert_manager_front.metadata[0].name
+                  name = kubernetes_secret.cloudflare_cert_manager_secondary.metadata[0].name
                   key  = "api-token"
                 }
               }
@@ -56,7 +56,7 @@ resource "kubernetes_manifest" "letsencrypt_cluster_issuer" {
     module.eks,
     helm_release.cert_manager,
     kubernetes_secret.cloudflare_cert_manager,
-    kubernetes_secret.cloudflare_cert_manager_front
+    kubernetes_secret.cloudflare_cert_manager_secondary
   ]
 }
 
