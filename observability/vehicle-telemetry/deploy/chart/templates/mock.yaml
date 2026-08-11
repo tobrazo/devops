@@ -1,0 +1,71 @@
+{{- if .Values.mock.enabled }}
+# Demo mode: a fake cabinet in-cluster, so the chart can be installed on a
+# scratch cluster with no vehicle and no credentials. The exporter's host and
+# scheme point here automatically (see vt.pandoraHost).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "vt.mockName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vt.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mock
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: mock
+  template:
+    metadata:
+      labels:
+        {{- include "vt.labels" . | nindent 8 }}
+        app.kubernetes.io/component: mock
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10002
+        fsGroup: 10002
+      containers:
+        - name: mock
+          image: "{{ .Values.mock.image.repository }}:{{ .Values.mock.image.tag }}"
+          imagePullPolicy: {{ .Values.mock.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: MOCK_DEVICE_IDS
+              value: {{ .Values.mock.deviceIds | quote }}
+          resources:
+            {{- toYaml .Values.mock.resources | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 10002
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "vt.mockName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vt.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mock
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: mock
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+{{- end }}

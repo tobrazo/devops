@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "vehicle-telemetry values",
+  "type": "object",
+  "required": ["exporter", "pandora", "service"],
+  "properties": {
+    "nameOverride": { "type": "string" },
+    "exporter": {
+      "type": "object",
+      "required": ["image"],
+      "properties": {
+        "image": {
+          "type": "object",
+          "required": ["repository", "tag"],
+          "properties": {
+            "repository": { "type": "string", "minLength": 1 },
+            "tag": { "type": "string", "minLength": 1 },
+            "pullPolicy": { "enum": ["Always", "IfNotPresent", "Never"] }
+          }
+        },
+        "resources": { "type": "object" },
+        "extraEnv": { "type": "array" },
+        "nodeSelector": { "type": "object" },
+        "tolerations": { "type": "array" },
+        "affinity": { "type": "object" }
+      }
+    },
+    "pandora": {
+      "type": "object",
+      "required": ["host", "scheme"],
+      "properties": {
+        "host": { "type": "string", "minLength": 1 },
+        "scheme": { "enum": ["http", "https"] },
+        "loginPath": { "type": "string" },
+        "loginField": { "type": "string" },
+        "loginFormat": { "type": "string" },
+        "deviceIds": { "type": "string" },
+        "pollIntervalSeconds": { "type": "integer", "minimum": 5 },
+        "logLevel": { "enum": ["DEBUG", "INFO", "WARNING", "ERROR"] },
+        "existingSecret": { "type": "string" },
+        "login": { "type": "string" },
+        "password": { "type": "string" }
+      }
+    },
+    "service": {
+      "type": "object",
+      "required": ["port"],
+      "properties": {
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 }
+      }
+    },
+    "loki": {
+      "type": "object",
+      "properties": {
+        "url": { "type": "string" },
+        "eventsKey": { "type": "string", "minLength": 1 },
+        "job": { "type": "string", "minLength": 1 }
+      }
+    },
+    "serviceMonitor": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "interval": { "type": "string" },
+        "labels": { "type": "object" }
+      }
+    },
+    "prometheusRule": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "labels": { "type": "object" }
+      }
+    },
+    "dashboard": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "label": { "type": "string", "minLength": 1 },
+        "labelValue": { "type": "string" },
+        "folderAnnotation": { "type": "string" },
+        "folder": { "type": "string" }
+      }
+    },
+    "mock": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "image": { "type": "object" },
+        "deviceIds": { "type": "string" },
+        "resources": { "type": "object" }
+      }
+    },
+    "triage": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "image": { "type": "object" },
+        "prometheusUrl": { "type": "string" },
+        "lokiUrl": { "type": "string" },
+        "model": { "type": "string" },
+        "effort": { "enum": ["low", "medium", "high", "xhigh", "max"] },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "existingSecret": { "type": "string" },
+        "anthropicApiKey": { "type": "string" },
+        "telegramBotToken": { "type": "string" },
+        "telegramChatId": { "type": "string" },
+        "resources": { "type": "object" }
+      }
+    }
+  }
+}

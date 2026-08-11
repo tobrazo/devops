@@ -1,0 +1,96 @@
+{{- if .Values.triage.enabled }}
+{{- if not .Values.triage.existingSecret }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "vt.triageSecretName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vt.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  ANTHROPIC_API_KEY: {{ .Values.triage.anthropicApiKey | quote }}
+  {{- if .Values.triage.telegramBotToken }}
+  TELEGRAM_BOT_TOKEN: {{ .Values.triage.telegramBotToken | quote }}
+  TELEGRAM_CHAT_ID: {{ .Values.triage.telegramChatId | quote }}
+  {{- end }}
+---
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "vt.triageName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vt.labels" . | nindent 4 }}
+    app.kubernetes.io/component: triage
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: triage
+  template:
+    metadata:
+      labels:
+        {{- include "vt.labels" . | nindent 8 }}
+        app.kubernetes.io/component: triage
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10003
+        fsGroup: 10003
+      containers:
+        - name: triage
+          image: "{{ .Values.triage.image.repository }}:{{ .Values.triage.image.tag }}"
+          imagePullPolicy: {{ .Values.triage.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.triage.port }}
+          env:
+            - name: TRIAGE_PORT
+              value: {{ .Values.triage.port | quote }}
+            - name: PROMETHEUS_URL
+              value: {{ .Values.triage.prometheusUrl | quote }}
+            - name: LOKI_URL
+              value: {{ .Values.triage.lokiUrl | quote }}
+            - name: TRIAGE_MODEL
+              value: {{ .Values.triage.model | quote }}
+            - name: TRIAGE_EFFORT
+              value: {{ .Values.triage.effort | quote }}
+          envFrom:
+            - secretRef:
+                name: {{ include "vt.triageSecretName" . }}
+          resources:
+            {{- toYaml .Values.triage.resources | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 10003
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "vt.triageName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vt.labels" . | nindent 4 }}
+    app.kubernetes.io/component: triage
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: triage
+  ports:
+    - name: http
+      port: {{ .Values.triage.port }}
+      targetPort: http
+{{- end }}

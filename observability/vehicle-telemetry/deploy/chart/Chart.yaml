@@ -1,0 +1,21 @@
+apiVersion: v2
+name: vehicle-telemetry
+description: Vehicle telemetry observability slice — Pandora exporter, alert rules as a PrometheusRule, a Grafana dashboard ConfigMap, an optional mock cabinet for demos, and an optional AI alert-triage agent.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+icon: https://raw.githubusercontent.com/cncf/artwork/main/projects/prometheus/icon/color/prometheus-icon-color.svg
+keywords:
+  - prometheus
+  - exporter
+  - observability
+  - telemetry
+  - loki
+  - grafana
+  - alerting
+home: https://github.com/tobrazo/devops
+sources:
+  - https://github.com/tobrazo/devops
+maintainers:
+  - name: tobrazo
+    url: https://github.com/tobrazo

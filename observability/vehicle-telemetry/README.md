@@ -11,7 +11,7 @@ Runs on your laptop in one command, with no vehicle and no credentials.
 ![Grafana](https://img.shields.io/badge/Grafana-14_panels-F46800?style=flat-square&logo=grafana&logoColor=white)
 ![Loki](https://img.shields.io/badge/Loki-logs-F46800?style=flat-square&logo=grafana&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-compose_stack-2496ED?style=flat-square&logo=docker&logoColor=white)
-![Kubernetes](https://img.shields.io/badge/Kubernetes-Deployment_+_ServiceMonitor-326CE5?style=flat-square&logo=kubernetes&logoColor=white)
+![Helm](https://img.shields.io/badge/Helm-chart-0F1689?style=flat-square&logo=helm&logoColor=white)
 ![Claude](https://img.shields.io/badge/Claude-alert_triage-D97757?style=flat-square&logo=anthropic&logoColor=white)
 <br/>
 ![promtool tests](https://img.shields.io/badge/promtool_test_rules-14_cases-3FB950?style=flat-square)
@@ -106,13 +106,14 @@ vehicle-telemetry/
 ├── agent/             → alert-triage: Alertmanager webhook → Claude → diagnosis
 ├── alerts/            → 10 alert rules + 14 promtool unit tests
 ├── dashboards/        → 14-panel Grafana dashboard (compose + k8s share it)
-├── deploy/            → Secret + Deployment + Service + ServiceMonitor, scrape config
+├── deploy/chart/      → Helm chart: exporter, PrometheusRule, dashboard, mock, triage
 ├── docker-compose.yml → just the exporter, for an existing Prometheus
 └── compose-stack/     → the whole stack: Prometheus · Alertmanager · Loki · Promtail · Grafana
 ```
 
-`alerts/` and `dashboards/` are consumed by **both** the compose stack and the k8s
-deploy — one source of truth for rules and dashboards.
+`alerts/` and `dashboards/` are consumed by **both** the Compose stack and the Helm chart —
+one source of truth for rules and dashboards. Helm cannot read outside its own directory, so
+the chart keeps copies under `deploy/chart/files/`; CI diffs them and fails on drift.
 
 ---
 
@@ -295,17 +296,29 @@ curl -s localhost:9180/metrics | grep ^pandora_
 </details>
 
 <details>
-<summary><b>Kubernetes</b></summary>
+<summary><b>Kubernetes — the whole slice, via Helm</b></summary>
+
+The [chart](deploy/chart) ships more than the exporter: the alert rules as a
+`PrometheusRule`, the dashboard as a sidecar-labelled `ConfigMap`, a `ServiceMonitor`, and
+optionally the mock cabinet and the triage agent.
 
 ```bash
-$EDITOR deploy/k8s.yaml        # replace REPLACE_WITH_* — use Vault / sealed-secrets in prod
-kubectl apply -f deploy/k8s.yaml
-kubectl -n monitoring logs -f deploy/pandora-exporter
+# Demo — scratch cluster, no vehicle, no credentials
+helm upgrade --install vt ./deploy/chart -n vehicle-telemetry --create-namespace \
+  -f ./deploy/chart/values-demo.yaml
+
+# Real cabinet, credentials from a Secret you own
+kubectl -n vehicle-telemetry create secret generic pandora-credentials \
+  --from-literal=PANDORA_LOGIN='you@example.com' --from-literal=PANDORA_PASSWORD='...'
+helm upgrade --install vt ./deploy/chart -n vehicle-telemetry --create-namespace \
+  --set pandora.existingSecret=pandora-credentials \
+  --set loki.url=http://loki.monitoring.svc:3100
 ```
 
-Ships a `ServiceMonitor` for the Prometheus Operator; without the operator, paste
-`deploy/prometheus-scrape.yml` into your `prometheus.yml`. Mount `alerts/pandora-rules.yml`
-into Prometheus `rule_files` and import `dashboards/pandora-vehicle.json`.
+Not using Helm? `helm template vt ./deploy/chart -n vehicle-telemetry > manifests.yaml`
+gives you plain YAML to `kubectl apply`. Without the Prometheus Operator, disable the
+`ServiceMonitor` and paste `deploy/prometheus-scrape.yml` into your `prometheus.yml`
+instead. An ArgoCD `Application` is in the [chart README](deploy/chart/README.md).
 </details>
 
 ---

@@ -22,7 +22,7 @@ thing that produces the numbers to the human who gets paged about them.
 
 | Project | What it is |
 |---------|------------|
-| 🚗 **[vehicle-telemetry](vehicle-telemetry)** | Pandora car telematics → 26 Prometheus metric families → 10 alert rules (with promtool unit tests) → a cabinet event feed shipped to Loki → a 14-panel Grafana dashboard → Compose **and** Kubernetes deploys → an AI agent that triages firing alerts. Ships a mock cabinet, so `docker compose --profile demo up` gives you the whole stack with live data and no hardware. |
+| 🚗 **[vehicle-telemetry](vehicle-telemetry)** | Pandora car telematics → 26 Prometheus metric families → 10 alert rules (with promtool unit tests) → a cabinet event feed shipped to Loki → a 14-panel Grafana dashboard → Compose **and** a Helm chart → an AI agent that triages firing alerts. Ships a mock cabinet, so `docker compose --profile demo up` gives you the whole stack with live data and no hardware. |
 
 Related: **[mcp/observability-ops](../mcp/observability-ops)** exposes a running
 Prometheus / Loki / Alertmanager stack as MCP tools, so an assistant can query it from a
