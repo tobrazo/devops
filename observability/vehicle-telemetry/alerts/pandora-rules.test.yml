@@ -166,6 +166,60 @@ tests:
 
   # ── Movement / security ─────────────────────────────────────────
   - interval: 1m
+    name: vehicle moves with the engine off
+    input_series:
+      - series: 'pandora_move{device_id="1234567890"}'
+        values: '0+0x2 1+0x20'        # stationary until 3 min, then moving
+      - series: 'pandora_engine_rpm{device_id="1234567890"}'
+        values: '0+0x25'              # engine never runs
+    alert_rule_test:
+      - eval_time: 4m                 # moving since 3m, for: 2m not elapsed
+        alertname: PandoraMovingEngineOff
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: PandoraMovingEngineOff
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              source: pandora
+              device_id: "1234567890"
+            exp_annotations:
+              summary: "Device 1234567890 is moving with the engine off"
+              description: |
+                The vehicle has been in motion for over two minutes with no engine
+                running — towed, pushed, or on a transporter.
+                If you did not arrange that, treat it as theft in progress.
+
+  - interval: 1m
+    name: ordinary driving must not look like a tow
+    input_series:
+      - series: 'pandora_move{device_id="1234567890"}'
+        values: '1+0x20'
+      - series: 'pandora_engine_rpm{device_id="1234567890"}'
+        values: '2200+0x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: PandoraMovingEngineOff
+        exp_alerts: []
+
+  - interval: 1m
+    name: a brief engine-off blip while rolling must not alert
+    input_series:
+      # Start-stop cutting the engine as the car rolls to a halt: one sample
+      # at zero, far shorter than the 2-minute window.
+      - series: 'pandora_move{device_id="1234567890"}'
+        values: '1+0x20'
+      - series: 'pandora_engine_rpm{device_id="1234567890"}'
+        values: '2200+0x5 0 2200+0x14'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: PandoraMovingEngineOff
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: PandoraMovingEngineOff
+        exp_alerts: []
+
+  - interval: 1m
     name: cabinet settings changed in the last five minutes
     input_series:
       - series: 'pandora_last_setting_ts{device_id="1234567890"}'

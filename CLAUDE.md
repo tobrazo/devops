@@ -36,7 +36,7 @@ kubectl kustomize gitops/platform/otel/additional-resources
 
 CI: `.github/workflows/helm-ci.yaml` runs `helm lint` + `helm template` (blocking) and `kube-linter` (informational) on pushes/PRs touching `helm-charts/**` or `gitops/**`. Helm 3 is required (`helm version` → v3.x).
 
-`.github/workflows/observability-ci.yaml` covers `observability/**` and `mcp/**`: `promtool check rules` + `promtool test rules`, `compileall` over every Python tree, and a live run of the demo stack that asserts the exporter reports, Prometheus scrapes it, all 9 rules load, and Grafana serves the provisioned dashboard.
+`.github/workflows/observability-ci.yaml` covers `observability/**` and `mcp/**`: `promtool check rules` + `promtool test rules`, `compileall` over every Python tree, and a live run of the demo stack that asserts the exporter reports, Prometheus scrapes it, all 10 rules load, and Grafana serves the provisioned dashboard.
 
 ## Helm chart conventions (apply to every chart here)
 

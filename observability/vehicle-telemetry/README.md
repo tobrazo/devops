@@ -14,7 +14,7 @@ Runs on your laptop in one command, with no vehicle and no credentials.
 ![Kubernetes](https://img.shields.io/badge/Kubernetes-Deployment_+_ServiceMonitor-326CE5?style=flat-square&logo=kubernetes&logoColor=white)
 ![Claude](https://img.shields.io/badge/Claude-alert_triage-D97757?style=flat-square&logo=anthropic&logoColor=white)
 <br/>
-![promtool tests](https://img.shields.io/badge/promtool_test_rules-11_cases-3FB950?style=flat-square)
+![promtool tests](https://img.shields.io/badge/promtool_test_rules-14_cases-3FB950?style=flat-square)
 ![demo](https://img.shields.io/badge/demo-no_hardware_required-3FB950?style=flat-square)
 
 </div>
@@ -56,7 +56,7 @@ flowchart LR
   cab["🌐 Pandora cabinet<br/>pro.p-on.ru"]
   mock["🎭 mock cabinet<br/>(demo profile)"]
   exp["🚗 exporter<br/>:9180/metrics"]
-  prom["🔥 Prometheus<br/>+ 9 alert rules"]
+  prom["🔥 Prometheus<br/>+ 10 alert rules"]
   am["📣 Alertmanager"]
   agent["🔎 alert-triage<br/>(triage profile)"]
   loki["📜 Loki ← Promtail"]
@@ -103,7 +103,7 @@ vehicle-telemetry/
 ├── exporter/          → the exporter (single file, requests + prometheus_client)
 ├── mock/              → fake cabinet, stdlib only — the demo profile
 ├── agent/             → alert-triage: Alertmanager webhook → Claude → diagnosis
-├── alerts/            → 9 alert rules + 11 promtool unit tests
+├── alerts/            → 10 alert rules + 14 promtool unit tests
 ├── dashboards/        → 13-panel Grafana dashboard (compose + k8s share it)
 ├── deploy/            → Secret + Deployment + Service + ServiceMonitor, scrape config
 ├── docker-compose.yml → just the exporter, for an existing Prometheus
@@ -160,7 +160,7 @@ deploy — one source of truth for rules and dashboards.
 
 ## 🔔 Alerts — and tests for them
 
-`alerts/pandora-rules.yml` — 9 rules:
+`alerts/pandora-rules.yml` — 10 rules:
 
 | Alert | Severity | Fires when |
 |---|---|---|
@@ -170,15 +170,17 @@ deploy — one source of truth for rules and dashboards.
 | `PandoraTireLow` | warning | Any wheel under 1.8 atm for 30 min |
 | `PandoraSimLowBalance` | warning | SIM balance < 50 — SMS notifications about to stop |
 | `PandoraFuelLow` | info | Under 10 % fuel (and above 0 — a flat 0 is a dead sensor) |
+| `PandoraMovingEngineOff` | critical | In motion for 2 min with the engine off — towed, pushed, or on a transporter |
 | `PandoraSettingsChangedRecently` | info | Cabinet settings changed in the last 5 min (audit) |
 | `PandoraHighMileageBurst` | info | > 80 km in an hour (car loaned out) |
 | `PandoraEngineOverheat` | critical | Coolant over 105 °C |
 
-Alert rules are code, so they have tests. `alerts/pandora-rules.test.yml` drives 11 cases
+Alert rules are code, so they have tests. `alerts/pandora-rules.test.yml` drives 14 cases
 through `promtool`: each alert must stay silent until its `for:` window elapses and then
-fire with the exact labels and rendered annotations — plus the negative cases that matter
-(low voltage while the engine is *running* must not alert; a flat `0 %` fuel reading is a
-sensor fault, not an empty tank).
+fire with the exact labels and rendered annotations — plus the negative cases that matter.
+Those are the interesting half: low voltage while the engine is *running* must not alert;
+a flat `0 %` fuel reading is a sensor fault, not an empty tank; and a start-stop system
+briefly reporting zero RPM while the car rolls to a halt must not read as a tow.
 
 ```bash
 cd alerts

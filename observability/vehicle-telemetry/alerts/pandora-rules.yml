@@ -70,6 +70,28 @@ groups:
           description: "Less than 10% fuel remaining."
 
       # ── Movement / security ─────────────────────────────────────
+      # The vehicle is in motion but nothing is driving it — towed, pushed,
+      # or loaded on a transporter. Both inputs are already collected, so
+      # this costs nothing and is the rule most worth waking up for.
+      #
+      # `for: 2m` is what makes it usable rather than noisy. Two benign
+      # cases produce the same instantaneous reading: a start-stop system
+      # cuts the engine while the car is still rolling to a halt, and the
+      # move/rpm samples can land a poll apart during shutdown. Neither
+      # lasts two minutes; a tow does.
+      - alert: PandoraMovingEngineOff
+        expr: pandora_move == 1 and pandora_engine_rpm == 0
+        for: 2m
+        labels:
+          severity: critical
+          source: pandora
+        annotations:
+          summary: "Device {{ $labels.device_id }} is moving with the engine off"
+          description: |
+            The vehicle has been in motion for over two minutes with no engine
+            running — towed, pushed, or on a transporter.
+            If you did not arrange that, treat it as theft in progress.
+
       # Recent settings change — useful to catch unexpected config edits
       - alert: PandoraSettingsChangedRecently
         expr: time() - pandora_last_setting_ts < 300

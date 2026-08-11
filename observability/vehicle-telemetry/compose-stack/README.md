@@ -76,7 +76,7 @@ files the Kubernetes deploy uses.
 |---|---|
 | `http://localhost:9180/metrics` | Raw `pandora_*` metrics |
 | `http://localhost:9090/targets` | `pandora-exporter` **UP** |
-| `http://localhost:9090/rules` | Group `pandora-vehicle.rules`, 9 rules |
+| `http://localhost:9090/rules` | Group `pandora-vehicle.rules`, 10 rules |
 | `http://localhost:9093` | Alertmanager, no config errors |
 | `http://localhost:3000` | Grafana → folder **Pandora** → *Pandora Vehicle* |
 
