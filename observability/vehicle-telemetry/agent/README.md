@@ -81,18 +81,59 @@ Three details that matter in production:
 
 ---
 
+## 🧠 Which model runs it
+
+The loop is model-agnostic. `TRIAGE_BACKEND=anthropic` (default) uses the Claude API;
+`openai` reaches anything speaking OpenAI chat-completions — **Ollama, vLLM, llama.cpp's
+server, LM Studio** — so the same agent can run against a model on your own hardware, with
+no outbound traffic at all.
+
+```bash
+# Against a model you host — see the local-model profile in compose-stack/
+TRIAGE_BACKEND=openai
+TRIAGE_BASE_URL=http://ollama:11434/v1
+TRIAGE_MODEL=qwen2.5:7b-instruct
+```
+
+Each backend only translates its own wire format to and from a neutral `Turn`; the loop
+itself never learns which one it is talking to. Plain `requests` rather than the `openai`
+SDK — the surface used is one POST, and the image stays small enough for a Raspberry Pi.
+
+> [!WARNING]
+> **Pick a model that can actually call tools, and verify it does.** Measured here on
+> `qwen2.5:1.5b`: it produced a fluent, confident diagnosis complete with quoted "query
+> output" — and made **zero tool calls**. Not one request reached Prometheus. Every number
+> in it was invented.
+>
+> That failure is silent by default, so the agent now guards against it: an answer produced
+> without a single query is delivered with an **⚠ Unsourced** banner rather than passed off
+> as a diagnosis (`TRIAGE_FLAG_UNSOURCED=0` to disable). Treat that banner as "this model is
+> too small for this job".
+>
+> Also budget the wall clock: that 1.5B turn took **~9.5 minutes on CPU**. Hence
+> `TRIAGE_MODEL_TIMEOUT`, which defaults to 900s.
+
+---
+
 ## ⚙️ Configuration
 
 | Var | Required | Default | Notes |
 |---|:---:|---|---|
-| `ANTHROPIC_API_KEY` | ✅ | – | Service exits immediately without it |
+| `TRIAGE_BACKEND` | – | `anthropic` | `anthropic` or `openai` |
+| `ANTHROPIC_API_KEY` | ✅¹ | – | Required for the `anthropic` backend; service exits without it |
+| `TRIAGE_BASE_URL` | ✅² | `http://ollama:11434/v1` | OpenAI-compatible endpoint |
+| `TRIAGE_API_KEY` | – | `not-needed` | Sent as a bearer token; Ollama ignores it, vLLM may not |
+| `TRIAGE_MODEL_TIMEOUT` | – | `900` | Ceiling for one model call — local inference is slow |
+| `TRIAGE_FLAG_UNSOURCED` | – | `1` | Mark answers produced without any query |
 | `PROMETHEUS_URL` | – | `http://prometheus:9090` | |
 | `LOKI_URL` | – | `http://loki:3100` | |
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | – | – | Unset → the diagnosis goes to the log instead |
-| `TRIAGE_MODEL` | – | `claude-opus-5` | |
+| `TRIAGE_MODEL` | – | `claude-opus-5` / `qwen2.5:7b-instruct` | Default follows the backend |
 | `TRIAGE_EFFORT` | – | `medium` | `low`…`max`; raise for messier stacks |
 | `TRIAGE_MAX_TOOL_ROUNDS` | – | `8` | Hard ceiling on the loop |
 | `TRIAGE_PORT` | – | `9099` | |
+
+¹ `anthropic` backend only.  ² `openai` backend only.
 
 ---
 

@@ -26,6 +26,7 @@ moves until you run `docker compose pull`.
 |---|---|---|
 | `demo` | `mock-pandora` — a fake cabinet | Run the whole stack with no vehicle, no account, no credentials |
 | `triage` | `alert-triage` — the [AI triage agent](../agent) | Firing alerts get diagnosed before they reach a human |
+| `local-model` | `ollama` | Run triage against a model on your own hardware, with no outbound traffic |
 
 ```bash
 # Demo — nothing to configure, Grafana needs no login
@@ -38,7 +39,19 @@ docker compose up -d --build
 # Demo + AI triage
 export ANTHROPIC_API_KEY=sk-ant-...
 docker compose --env-file .env.demo --profile demo --profile triage up -d --build
+
+# Demo + triage against a locally hosted model — no API key, no outbound traffic
+docker compose --env-file .env.demo --profile local-model up -d ollama
+docker compose --profile local-model exec ollama ollama pull qwen2.5:7b-instruct
+TRIAGE_BACKEND=openai TRIAGE_MODEL=qwen2.5:7b-instruct \
+  docker compose --env-file .env.demo --profile demo --profile triage --profile local-model up -d --build
 ```
+
+The `ollama` service publishes **no host port** on purpose: 11434 is very often already
+taken by a natively installed Ollama, which would then silently answer instead of the
+container. The agent reaches it over the compose network. Read the
+[model warning](../agent/README.md#-which-model-runs-it) before picking one — a model too
+small to call tools will invent its evidence rather than fetch it.
 
 `.env.demo` is committed on purpose — nothing in it is a secret. `.env` is gitignored.
 `GRAFANA_PASSWORD` has no default: compose refuses to start rather than silently booting

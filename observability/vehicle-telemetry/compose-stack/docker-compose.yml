@@ -10,6 +10,7 @@
 # Profiles (opt in):
 #   --profile demo    : mock-pandora, a fake cabinet — run the stack with no car
 #   --profile triage  : alert-triage, an AI agent that diagnoses firing alerts
+#   --profile local-model : ollama, so triage runs against a model you host
 #
 # Usage:
 #   Demo:  docker compose --env-file .env.demo --profile demo up -d --build
@@ -123,7 +124,13 @@ services:
       ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
       PROMETHEUS_URL: "http://prometheus:9090"
       LOKI_URL: "http://loki:3100"
-      TRIAGE_MODEL: "${TRIAGE_MODEL:-claude-opus-5}"
+      # anthropic (default) or openai — the latter reaches anything speaking
+      # OpenAI chat-completions, which is how you point this at your own hardware.
+      TRIAGE_BACKEND: "${TRIAGE_BACKEND:-anthropic}"
+      TRIAGE_BASE_URL: "${TRIAGE_BASE_URL:-http://ollama:11434/v1}"
+      TRIAGE_API_KEY: "${TRIAGE_API_KEY:-not-needed}"
+      TRIAGE_MODEL: "${TRIAGE_MODEL:-}"
+      TRIAGE_MODEL_TIMEOUT: "${TRIAGE_MODEL_TIMEOUT:-900}"
       TRIAGE_EFFORT: "${TRIAGE_EFFORT:-medium}"
       TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN:-}"
       TELEGRAM_CHAT_ID: "${TELEGRAM_CHAT_ID:-}"
@@ -135,6 +142,22 @@ services:
     depends_on:
       - prometheus
       - loki
+
+  # ─── Ollama (local-model profile) ─────────────────────────────
+  # Runs the model on your own hardware. Pull one before first use:
+  #   docker compose --profile local-model exec ollama ollama pull qwen2.5:7b-instruct
+  # Pick a model that supports tool calling — the agent's whole loop needs it.
+  ollama:
+    profiles: ["local-model"]
+    image: ollama/ollama:0.6.2
+    restart: unless-stopped
+    volumes:
+      - ollama-data:/root/.ollama
+    # Deliberately no published port: the agent reaches it over the compose
+    # network, and 11434 is very often already taken by a natively installed
+    # Ollama — which would then silently answer instead of this container.
+    networks:
+      - monitoring
 
   # ─── Loki (log store) ─────────────────────────────────────────
   loki:
@@ -193,6 +216,7 @@ networks:
     driver: bridge
 
 volumes:
+  ollama-data:
   prometheus-data:
   alertmanager-data:
   grafana-data:
