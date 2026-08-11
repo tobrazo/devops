@@ -1,0 +1,123 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "vt.exporterName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vt.labels" . | nindent 4 }}
+    app.kubernetes.io/component: exporter
+spec:
+  # Singleton on purpose: Pandora session cookies are not shareable, so a
+  # second replica would fight over the session. Recreate keeps two pods from
+  # overlapping even briefly during a rollout.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: exporter
+  template:
+    metadata:
+      labels:
+        {{- include "vt.labels" . | nindent 8 }}
+        app.kubernetes.io/component: exporter
+      annotations:
+        # Roll the pod when credentials change.
+        checksum/secret: {{ include (print $.Template.BasePath "/secret-pandora.yaml") . | sha256sum }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+      containers:
+        - name: exporter
+          image: "{{ .Values.exporter.image.repository }}:{{ .Values.exporter.image.tag }}"
+          imagePullPolicy: {{ .Values.exporter.image.pullPolicy }}
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.service.port }}
+          env:
+            - name: PANDORA_HOST
+              value: {{ include "vt.pandoraHost" . | quote }}
+            - name: PANDORA_SCHEME
+              value: {{ include "vt.pandoraScheme" . | quote }}
+            - name: PANDORA_LOGIN_PATH
+              value: {{ .Values.pandora.loginPath | quote }}
+            - name: PANDORA_LOGIN_FIELD
+              value: {{ .Values.pandora.loginField | quote }}
+            - name: PANDORA_LOGIN_FORMAT
+              value: {{ .Values.pandora.loginFormat | quote }}
+            - name: PANDORA_DEVICE_IDS
+              value: {{ .Values.pandora.deviceIds | quote }}
+            - name: POLL_INTERVAL_SEC
+              value: {{ .Values.pandora.pollIntervalSeconds | quote }}
+            - name: EXPORTER_PORT
+              value: {{ .Values.service.port | quote }}
+            - name: LOG_LEVEL
+              value: {{ .Values.pandora.logLevel | quote }}
+            {{- if .Values.loki.url }}
+            - name: LOKI_URL
+              value: {{ .Values.loki.url | quote }}
+            - name: PANDORA_EVENTS_KEY
+              value: {{ .Values.loki.eventsKey | quote }}
+            - name: LOKI_JOB
+              value: {{ .Values.loki.job | quote }}
+            {{- end }}
+            {{- with .Values.exporter.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          envFrom:
+            - secretRef:
+                name: {{ include "vt.pandoraSecretName" . }}
+          resources:
+            {{- toYaml .Values.exporter.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 10001
+            capabilities:
+              drop: ["ALL"]
+      {{- with .Values.exporter.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.exporter.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.exporter.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "vt.exporterName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vt.labels" . | nindent 4 }}
+    app.kubernetes.io/component: exporter
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: exporter
+  ports:
+    - name: metrics
+      port: {{ .Values.service.port }}
+      targetPort: metrics

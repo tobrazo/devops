@@ -1,0 +1,505 @@
+{
+  "title": "Pandora Vehicle",
+  "uid": "pandora-vehicle",
+  "schemaVersion": 38,
+  "version": 4,
+  "tags": [
+    "pandora",
+    "vehicle",
+    "telemetry"
+  ],
+  "timezone": "browser",
+  "refresh": "15s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "device",
+        "label": "Device",
+        "type": "query",
+        "datasource": "Prometheus",
+        "query": "label_values(pandora_online, device_id)",
+        "refresh": 2,
+        "includeAll": false,
+        "multi": false
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Status",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "pandora_online{device_id=\"$device\"}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "OFFLINE",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "ONLINE",
+                  "color": "green"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Speed",
+      "gridPos": {
+        "x": 4,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "pandora_speed_kmh{device_id=\"$device\"}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "velocitykmh"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Fuel",
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "pandora_fuel_percent{device_id=\"$device\"}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 15
+              },
+              {
+                "color": "green",
+                "value": 30
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Battery",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "pandora_voltage_v{device_id=\"$device\"}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "volt",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 11.8
+              },
+              {
+                "color": "green",
+                "value": 12.4
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "GSM signal",
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "pandora_gsm_level{device_id=\"$device\"}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 5
+        }
+      }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "SIM balance",
+      "gridPos": {
+        "x": 20,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "pandora_sim_balance{device_id=\"$device\"}",
+          "refId": "A",
+          "legendFormat": "{{currency}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 50
+              },
+              {
+                "color": "green",
+                "value": 100
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Speed & engine RPM",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "pandora_speed_kmh{device_id=\"$device\"}",
+          "refId": "A",
+          "legendFormat": "Speed (km/h)"
+        },
+        {
+          "expr": "pandora_engine_rpm{device_id=\"$device\"}",
+          "refId": "B",
+          "legendFormat": "RPM"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Tire pressure (atm)",
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "pandora_tpms_atm{device_id=\"$device\"}",
+          "refId": "A",
+          "legendFormat": "{{wheel}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "min": 1.5,
+          "max": 2.6,
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 1.8
+              },
+              {
+                "color": "green",
+                "value": 2.0
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Voltage & temperatures",
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "pandora_voltage_v{device_id=\"$device\"}",
+          "refId": "A",
+          "legendFormat": "Voltage"
+        },
+        {
+          "expr": "pandora_cabin_temp_c{device_id=\"$device\"}",
+          "refId": "B",
+          "legendFormat": "Cabin °C"
+        },
+        {
+          "expr": "pandora_outside_temp_c{device_id=\"$device\"}",
+          "refId": "C",
+          "legendFormat": "Outside °C"
+        },
+        {
+          "expr": "pandora_engine_temp_c{device_id=\"$device\"}",
+          "refId": "D",
+          "legendFormat": "Engine °C"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Fuel level & range left",
+      "gridPos": {
+        "x": 12,
+        "y": 12,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "pandora_fuel_percent{device_id=\"$device\"}",
+          "refId": "A",
+          "legendFormat": "Fuel %"
+        },
+        {
+          "expr": "pandora_range_to_empty_km{device_id=\"$device\"}",
+          "refId": "B",
+          "legendFormat": "Range left (km)"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "Mileage growth (per hour)",
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 24,
+        "h": 6
+      },
+      "targets": [
+        {
+          "expr": "increase(pandora_mileage_can_km{device_id=\"$device\"}[1h])",
+          "refId": "A",
+          "legendFormat": "km/h"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "type": "geomap",
+      "title": "GPS position",
+      "gridPos": {
+        "x": 0,
+        "y": 26,
+        "w": 24,
+        "h": 14
+      },
+      "options": {
+        "view": {
+          "id": "fit",
+          "zoom": 14
+        },
+        "controls": {
+          "mouseWheelZoom": true,
+          "showZoom": true,
+          "showAttribution": true
+        },
+        "basemap": {
+          "type": "carto",
+          "name": "Basemap",
+          "config": {
+            "theme": "light"
+          }
+        },
+        "layers": [
+          {
+            "type": "markers",
+            "name": "Vehicle",
+            "config": {
+              "style": {
+                "size": {
+                  "fixed": 10
+                },
+                "color": {
+                  "fixed": "red"
+                },
+                "opacity": 1
+              },
+              "showLegend": false
+            },
+            "location": {
+              "mode": "coords",
+              "latitude": "lat",
+              "longitude": "lon"
+            },
+            "tooltip": true
+          }
+        ],
+        "tooltip": {
+          "mode": "details"
+        }
+      },
+      "targets": [
+        {
+          "expr": "pandora_position_lat{device_id=\"$device\"}",
+          "instant": true,
+          "refId": "A",
+          "legendFormat": "lat"
+        },
+        {
+          "expr": "pandora_position_lon{device_id=\"$device\"}",
+          "instant": true,
+          "refId": "B",
+          "legendFormat": "lon"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": {
+              "Value #A": "lat",
+              "Value #B": "lon"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "type": "logs",
+      "title": "Vehicle events (Loki)",
+      "datasource": "Loki",
+      "gridPos": {
+        "x": 0,
+        "y": 40,
+        "w": 24,
+        "h": 10
+      },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending"
+      },
+      "targets": [
+        {
+          "datasource": "Loki",
+          "expr": "{job=\"pandora\", device_id=\"$device\"}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "type": "logs",
+      "title": "Stack logs (Loki)",
+      "datasource": "Loki",
+      "gridPos": {
+        "x": 0,
+        "y": 50,
+        "w": 24,
+        "h": 10
+      },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending"
+      },
+      "targets": [
+        {
+          "datasource": "Loki",
+          "expr": "{job=\"docker\"} |= ``",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

@@ -57,6 +57,54 @@ jobs:
             mcp/ansible-ops \
             python
 
+  chart:
+    name: helm lint + template
+    runs-on: ubuntu-latest
+    env:
+      CHART: observability/vehicle-telemetry/deploy/chart
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.1
+
+      - name: chart files match their canonical sources
+        run: |
+          # Helm cannot read outside the chart dir, so alerts/ and dashboards/
+          # are copied into files/. This is what stops the copies drifting.
+          diff -u observability/vehicle-telemetry/alerts/pandora-rules.yml \
+                  "$CHART/files/pandora-rules.yml"
+          diff -u observability/vehicle-telemetry/dashboards/pandora-vehicle.json \
+                  "$CHART/files/pandora-vehicle.json"
+
+      - name: helm lint
+        run: |
+          helm lint "$CHART"
+          helm lint "$CHART" -f "$CHART/values-demo.yaml"
+
+      - name: helm template (every mode renders)
+        run: |
+          set -e
+          helm template vt "$CHART" -n vehicle-telemetry > /dev/null
+          helm template vt "$CHART" -n vehicle-telemetry -f "$CHART/values-demo.yaml" > /dev/null
+          helm template vt "$CHART" -n vehicle-telemetry \
+            --set triage.enabled=true --set loki.url=http://loki:3100 > /dev/null
+
+      - name: rendered rules and dashboard survive templating
+        run: |
+          helm template vt "$CHART" -n vehicle-telemetry > /tmp/render.yaml
+          ruby -ryaml -rjson -e '
+            docs = YAML.load_stream(File.read("/tmp/render.yaml")).compact
+            rule = docs.find { |d| d["kind"] == "PrometheusRule" }
+            cm   = docs.find { |d| d["kind"] == "ConfigMap" }
+            n = rule["spec"]["groups"].sum { |g| g["rules"].size }
+            abort "expected 10 rules, got #{n}" unless n == 10
+            panels = JSON.parse(cm["data"]["pandora-vehicle.json"])["panels"].size
+            abort "expected 14 panels, got #{panels}" unless panels == 14
+            puts "PrometheusRule: #{n} rules; dashboard ConfigMap: #{panels} panels"
+          '
+
   stack:
     name: demo stack comes up and collects
     runs-on: ubuntu-latest

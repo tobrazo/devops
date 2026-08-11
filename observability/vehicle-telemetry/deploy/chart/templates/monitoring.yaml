@@ -1,0 +1,40 @@
+{{- if .Values.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "vt.exporterName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vt.labels" . | nindent 4 }}
+    {{- with .Values.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: exporter
+  endpoints:
+    - port: metrics
+      interval: {{ .Values.serviceMonitor.interval }}
+      path: /metrics
+{{- end }}
+{{- if .Values.prometheusRule.enabled }}
+---
+# The alert rules, rendered straight from alerts/pandora-rules.yml — the same
+# file the Compose stack mounts and `promtool test rules` exercises. The copy
+# under files/ is kept byte-identical by CI, so the rules cannot drift between
+# the two deployment paths.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "vt.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vt.labels" . | nindent 4 }}
+    {{- with .Values.prometheusRule.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+{{ .Files.Get "files/pandora-rules.yml" | indent 2 }}
+{{- end }}

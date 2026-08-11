@@ -1,0 +1,17 @@
+{{- if .Values.dashboard.enabled }}
+# The Grafana sidecar watches for ConfigMaps carrying its label and imports
+# whatever JSON they hold. Same dashboard file the Compose stack provisions.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "vt.fullname" . }}-dashboard
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vt.labels" . | nindent 4 }}
+    {{ .Values.dashboard.label }}: {{ .Values.dashboard.labelValue | quote }}
+  annotations:
+    {{ .Values.dashboard.folderAnnotation }}: {{ .Values.dashboard.folder | quote }}
+data:
+  pandora-vehicle.json: |
+{{ .Files.Get "files/pandora-vehicle.json" | indent 4 }}
+{{- end }}

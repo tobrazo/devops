@@ -1,0 +1,50 @@
+{{ .Chart.Name }} "{{ .Release.Name }}" deployed to namespace "{{ .Release.Namespace }}".
+
+Exporter:
+  kubectl -n {{ .Release.Namespace }} logs -f deploy/{{ include "vt.exporterName" . }}
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "vt.exporterName" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
+  → http://localhost:{{ .Values.service.port }}/metrics
+
+{{ if .Values.mock.enabled -}}
+DEMO MODE: the exporter is talking to the in-cluster mock cabinet
+({{ include "vt.mockName" . }}:8080), not a real vehicle. Telemetry is simulated.
+{{- else -}}
+Cabinet: {{ .Values.pandora.scheme }}://{{ .Values.pandora.host }}
+{{- if not .Values.pandora.existingSecret }}
+
+  ⚠  Credentials came from values, not a Secret you provided. Set
+     pandora.existingSecret and keep them out of Git for anything real.
+{{- end }}
+{{- end }}
+
+{{ if .Values.serviceMonitor.enabled -}}
+Scraping: a ServiceMonitor was created. Confirm Prometheus selected it —
+  kubectl -n {{ .Release.Namespace }} get servicemonitor {{ include "vt.exporterName" . }}
+If the target never appears, your Prometheus likely selects on different
+labels than serviceMonitor.labels ({{ .Values.serviceMonitor.labels | toJson }}).
+{{- else -}}
+Scraping: ServiceMonitor disabled — add deploy/prometheus-scrape.yml to your
+Prometheus config, or annotate/scrape the Service yourself.
+{{- end }}
+
+{{ if .Values.prometheusRule.enabled -}}
+Alerts: 10 rules shipped as a PrometheusRule.
+  kubectl -n {{ .Release.Namespace }} get prometheusrule {{ include "vt.fullname" . }}
+{{- end }}
+{{ if .Values.dashboard.enabled -}}
+Dashboard: ConfigMap labelled {{ .Values.dashboard.label }}={{ .Values.dashboard.labelValue }} for the
+Grafana sidecar, folder "{{ .Values.dashboard.folder }}". No sidecar? Import
+dashboards/pandora-vehicle.json by hand.
+{{- end }}
+{{ if .Values.loki.url -}}
+Events: cabinet events ship to {{ .Values.loki.url }} as {job="{{ .Values.loki.job }}"}.
+{{- else -}}
+Events: loki.url is empty — cabinet events are not being shipped.
+{{- end }}
+{{ if .Values.triage.enabled }}
+Triage agent: point an Alertmanager webhook receiver at
+  http://{{ include "vt.triageName" . }}.{{ .Release.Namespace }}.svc:{{ .Values.triage.port }}/alerts
+{{- end }}
+
+⚠  /metrics carries pandora_position_lat/lon — the vehicle's live location.
+   Do not expose the Service or the dashboard outside your network.
