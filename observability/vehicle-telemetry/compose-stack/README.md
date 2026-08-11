@@ -79,9 +79,12 @@ files the Kubernetes deploy uses.
 | `http://localhost:9090/rules` | Group `pandora-vehicle.rules`, 10 rules |
 | `http://localhost:9093` | Alertmanager, no config errors |
 | `http://localhost:3000` | Grafana → folder **Pandora** → *Pandora Vehicle* |
+| `http://localhost:3100` | Loki — vehicle events under `{job="pandora"}`, container logs under `{job="docker"}` |
 
 In demo mode the mock runs a 30-minute drive cycle, so within a couple of minutes the
-charts fill in and `PandoraSimLowBalance` / `PandoraTireLow` start firing on their own.
+charts fill in and `PandoraSimLowBalance` / `PandoraTireLow` start firing on their own. The
+mock's event feed covers the previous cycle too, so the **Vehicle events** panel has content
+immediately rather than after the first ten minutes.
 
 ---
 

@@ -121,14 +121,65 @@ def _device_state(device_id: str, now: float, index: int) -> dict:
     }
 
 
+# Discrete events the cabinet emits alongside the live state. The real feed's
+# schema is not documented; this is a plausible stand-in so the demo and CI
+# exercise the whole path. The exporter is deliberately shape-agnostic — it
+# ships the record verbatim and only looks up two label values — so a
+# different real-world schema does not require an exporter change.
+_CYCLE_EVENTS = (
+    (580, "disarm", "Alarm disarmed from key fob"),
+    (590, "door_open", "Driver door opened"),
+    (600, "engine_start", "Engine started"),
+    (1500, "engine_stop", "Engine stopped"),
+    (1510, "door_open", "Driver door opened"),
+    (1520, "arm", "Alarm armed from key fob"),
+)
+
+
+def _events(device_id: str, now: float, index: int) -> list[dict]:
+    """Recent events: the previous drive cycle in full, then the current one
+    so far.
+
+    A real feed shows history, not just what has happened since midnight —
+    and covering the previous cycle means there is always something to read,
+    however the poll happens to land. Without it, a freshly started stack
+    would show an empty feed for the first ten minutes.
+
+    IDs derive from the cycle number, so an event keeps the same id across
+    polls — which is what makes the exporter's de-duplication testable.
+    """
+    shifted = now + index * 300
+    cycle = int(shifted // CYCLE)
+    elapsed = shifted % CYCLE
+
+    out = []
+    for cycle_no, reached in ((cycle - 1, CYCLE), (cycle, elapsed)):
+        for offset, event_type, text in _CYCLE_EVENTS:
+            if offset > reached:
+                continue
+            # Never emit a future timestamp — Loki rejects those.
+            occurred = min(int(cycle_no * CYCLE + offset - index * 300), int(now))
+            out.append(
+                {
+                    "id": cycle_no * 100 + offset,
+                    "device_id": device_id,
+                    "type": event_type,
+                    "time": occurred,
+                    "text": text,
+                }
+            )
+    return out[-12:]
+
+
 def build_payload() -> dict:
     now = time.time()
     ts = int(now)
-    stats, times = {}, {}
+    stats, times, lenta = {}, {}, []
     for index, device_id in enumerate(DEVICE_IDS):
         stats[device_id] = _device_state(device_id, now, index)
         times[device_id] = {"online": ts, "command": ts - 3600, "setting": ts - 86400}
-    return {"ts": ts, "stats": stats, "time": times}
+        lenta.extend(_events(device_id, now, index))
+    return {"ts": ts, "stats": stats, "time": times, "lenta": lenta}
 
 
 class Handler(BaseHTTPRequestHandler):

@@ -41,10 +41,15 @@ services:
       PANDORA_DEVICE_IDS: "${PANDORA_DEVICE_IDS:-}"
       POLL_INTERVAL_SEC: "${POLL_INTERVAL_SEC:-10}"
       LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+      # Cabinet events go to Loki as log lines. Unset LOKI_URL to disable.
+      LOKI_URL: "${LOKI_URL-http://loki:3100}"
+      PANDORA_EVENTS_KEY: "${PANDORA_EVENTS_KEY:-lenta}"
     ports:
       - "127.0.0.1:9180:9180"   # bind to localhost only — has lat/lon!
     networks:
       - monitoring
+    depends_on:
+      - loki
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }

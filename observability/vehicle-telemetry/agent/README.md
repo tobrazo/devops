@@ -33,6 +33,10 @@ or a dead sensor. Fairly confident. Next: check what stays powered with
 the ignition off before the voltage crosses the 11.0V cranking floor.
 ```
 
+Loki holds the cabinet's own event feed alongside the stack's container logs, so the agent's
+LogQL tool can reach for `{job="pandora"}` and find that a door opened two minutes before the
+voltage sagged — no change to the agent was needed for that, it simply has more to read.
+
 Nothing here is vehicle-specific. Point `PROMETHEUS_URL` / `LOKI_URL` at any stack and
 it triages whatever alerts you route to it.
 
