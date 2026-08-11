@@ -29,13 +29,24 @@ receivers:
         send_resolved: false
         max_alerts: 5
 
-  # Raw Telegram delivery. Set TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID in .env,
-  # uncomment the block below, and change route.receiver to 'telegram'.
+  # Raw Telegram delivery.
+  #
+  # ⚠ Alertmanager does NOT expand environment variables in this file — a
+  # '${TELEGRAM_BOT_TOKEN}' here is sent to Telegram as that literal string.
+  # (Verified: the outgoing request path was /bot$%7BTELEGRAM_BOT_TOKEN%7D/…)
+  # Hence bot_token_file, which Alertmanager reads at send time, and a chat_id
+  # written in plainly — it is an identifier, not a secret.
+  #
+  # To enable:
+  #   1. printf '%s' '<token from @BotFather>' > secrets/telegram-token
+  #   2. uncomment below and replace REPLACE_WITH_CHAT_ID
+  #   3. point route.receiver at 'telegram'
+  #   4. docker compose restart alertmanager
   #
   # - name: telegram
   #   telegram_configs:
-  #     - bot_token: '${TELEGRAM_BOT_TOKEN}'
-  #       chat_id: ${TELEGRAM_CHAT_ID}
+  #     - bot_token_file: /etc/alertmanager/secrets/telegram-token
+  #       chat_id: REPLACE_WITH_CHAT_ID
   #       api_url: 'https://api.telegram.org'
   #       parse_mode: 'HTML'
   #       message: |

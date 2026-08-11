@@ -3,3 +3,8 @@ compose-stack/.env
 *.pyc
 *.bak
 __pycache__/
+
+# Alertmanager bot token — see compose-stack/secrets/README.md
+compose-stack/secrets/*
+!compose-stack/secrets/.gitkeep
+!compose-stack/secrets/README.md
