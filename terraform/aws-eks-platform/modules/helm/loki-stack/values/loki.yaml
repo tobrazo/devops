@@ -1,0 +1,125 @@
+deploymentMode: SingleBinary
+
+singleBinary:
+  replicas: 1
+  enableStatefulSet: true
+  persistence:
+    enabled: true
+    storageClass: gp2
+    size: 100Gi
+
+image:
+  tag: "2.9.3"
+
+serviceAccount:
+  create: true
+  name: loki
+
+loki:
+  auth_enabled: false
+
+  server:
+    http_listen_port: 3100
+
+  commonConfig:
+    replication_factor: 1
+
+  ingester:
+    wal:
+      enabled: true
+    lifecycler:
+      ring:
+        kvstore:
+          store: memberlist
+      final_sleep: 0s
+    chunk_idle_period: 3m
+    max_chunk_age: 1h
+    chunk_retain_period: 30s
+
+  distributor:
+    ring:
+      kvstore:
+        store: memberlist
+
+  limits_config:
+    ingestion_rate_mb: 10
+    ingestion_burst_size_mb: 20
+    max_entries_limit_per_query: 500000
+    max_streams_per_user: 1000
+    max_global_streams_per_user: 2000
+    max_query_parallelism: 32
+    max_concurrent: 512
+
+  query_range:
+    split_queries_by_interval: 0
+    parallelise_shardable_queries: false
+
+  querier:
+    max_concurrent: 2048
+
+  frontend:
+    max_outstanding_per_tenant: 4096
+    compress_responses: true
+
+  storage:
+    type: filesystem
+    filesystem:
+      chunks_directory: /var/loki/chunks
+      rules_directory: /var/loki/rules
+
+  schemaConfig:
+    configs:
+      - from: "2023-01-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v12
+        index:
+          prefix: loki_index_
+          period: 24h
+
+read:
+  replicas: 0
+
+write:
+  replicas: 0
+
+backend:
+  replicas: 0
+
+#########################
+# Probes like old setup #
+#########################
+singleBinary:
+  readinessProbe:
+    httpGet:
+      path: /ready
+      port: http-metrics
+    initialDelaySeconds: 60
+  livenessProbe:
+    httpGet:
+      path: /ready
+      port: http-metrics
+    initialDelaySeconds: 60
+  terminationGracePeriodSeconds: 4800
+
+podSecurityContext:
+  runAsUser: 10001
+  runAsGroup: 10001
+  runAsNonRoot: true
+  fsGroup: 10001
+
+###############################################
+# ✅ Promtail (как в старом loki-stack chart) #
+###############################################
+promtail:
+  enabled: true
+  serviceAccount:
+    create: true
+    name: promtail
+  config:
+    logLevel: info
+    serverPort: 3101
+    clients:
+      - url: http://loki:3100/loki/api/v1/push
+        batchsize: 5000000
+        batchwait: 5s

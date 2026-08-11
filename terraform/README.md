@@ -19,6 +19,7 @@ The **IaC** tree of the repo. Each subfolder is a standalone Terraform module yo
 
 | Module | What it provisions |
 |--------|--------------------|
+| ☁️ **[aws-eks-platform](aws-eks-platform)** | A production **EKS landing zone** — VPC, managed EKS, EFS, IRSA roles, security groups, and platform add-ons (ArgoCD, ingress-nginx, cluster-autoscaler, external-dns, cert-manager, kube-prometheus, Loki). `prod` + `management` envs and an S3/DynamoDB state backend. |
 | 🖥️ **[web-server](web-server)** | Two `t2.micro` nginx EC2 instances across two AZs, fronted by a Classic ELB with health checks — on **AWS** (`us-east-1`). Bootstrapped via `user_data`. |
 
 Each module has its own README with an architecture diagram, a configuration reference, and usage steps.

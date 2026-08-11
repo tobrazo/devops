@@ -1,0 +1,22 @@
+provider: cloudflare
+cloudflare:
+  apiTokenSecret:
+    name: cloudflare-api-token
+    key: api-token
+
+env:
+  - name: CF_API_EMAIL
+    value: "your-email@example.com"
+
+extraArgs:
+  - --cloudflare-proxied=true
+
+policy: upsert-only # temporary change, will be reverted to upsert-only later set "sync"
+registry: txt
+txtOwnerId: eks-prod
+
+sources:
+  - ingress
+
+logLevel: info
+interval: 1m
