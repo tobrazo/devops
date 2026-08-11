@@ -352,7 +352,7 @@ Key inputs in `terraform.tfvars` and `locals.tf`:
 | Availability Zones | `vpc.tf` | `eu-central-1a/b/c` |
 | Cloudflare tokens | `terraform.tfvars` | DNS/cert-manager API tokens |
 | ArgoCD hostname | `locals.tf` | `argocd.example.com` |
-| App secrets | `terraform.tfvars` | B2B and NestJS backend secrets |
+| App secrets | `terraform.tfvars` | Web + backend application secrets |
 
 ---
 

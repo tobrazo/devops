@@ -47,16 +47,16 @@ resource "kubernetes_secret" "cloudflare_external_dns" {
 
 
 #########################################
-# Cloudflare External DNS Front Secret
+# Cloudflare External DNS (secondary) Secret
 #########################################
-resource "kubernetes_secret" "cloudflare_external_dns_front" {
+resource "kubernetes_secret" "cloudflare_external_dns_secondary" {
   metadata {
-    name      = "cloudflare-external-dns-token-front"
+    name      = "cloudflare-external-dns-token-secondary"
     namespace = local.external_dns_namespace
   }
 
   data = {
-    "api-token" = local.cloudflare_cert_manager_front_secret["api-token"]
+    "api-token" = local.cloudflare_cert_manager_secondary_secret["api-token"]
   }
 
   type       = "Opaque"
@@ -82,17 +82,17 @@ resource "kubernetes_secret" "cloudflare_cert_manager" {
 }
 
 #######################################
-# Cloudflare Cert-Manager Front Secret
+# Cloudflare Cert-Manager (secondary) Secret
 #######################################
 
-resource "kubernetes_secret" "cloudflare_cert_manager_front" {
+resource "kubernetes_secret" "cloudflare_cert_manager_secondary" {
   metadata {
-    name      = "cloudflare-api-token-secret-front"
+    name      = "cloudflare-api-token-secret-secondary"
     namespace = local.cert_manager_namespace
   }
 
   data = {
-    "api-token" = local.cloudflare_cert_manager_front_secret["api-token"]
+    "api-token" = local.cloudflare_cert_manager_secondary_secret["api-token"]
   }
 
   type       = "Opaque"
@@ -137,30 +137,30 @@ resource "kubernetes_secret" "ghcr_creds_argocd" {
 
 
 #########################################
-# B2B Web Secrets
+# Web app secrets
 #########################################
-resource "kubernetes_secret" "b2b_web_prod" {
+resource "kubernetes_secret" "web_app" {
   metadata {
-    name      = "b2b-web-secrets"
+    name      = "web-app-secrets"
     namespace = "prod"
   }
 
-  data = local.b2b_web_secret_map
+  data = local.web_app_secret_map
 
   type       = "Opaque"
   depends_on = [module.eks, kubernetes_namespace.prod]
 }
 
 #########################################
-# NestJS App Secrets
+# Backend secrets
 #########################################
-resource "kubernetes_secret" "nestjs_back_prod" {
+resource "kubernetes_secret" "backend" {
   metadata {
-    name      = "nestjs-app-secrets-back"
+    name      = "backend-secrets"
     namespace = "prod"
   }
 
-  data = local.nestjs_back_secret_map
+  data = local.backend_secret_map
 
   type       = "Opaque"
   depends_on = [module.eks, kubernetes_namespace.prod]

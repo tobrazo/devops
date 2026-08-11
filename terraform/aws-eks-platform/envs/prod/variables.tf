@@ -16,13 +16,13 @@ variable "ghcr_creds_dockerconfigjson" {
   sensitive   = true
 }
 
-variable "b2b_web_secrets_json" {
+variable "web_app_secrets_json" {
   type        = string
-  description = "JSON payload for b2b web secret"
+  description = "JSON payload for the web-app secret"
   sensitive   = true
 }
 
-variable "nestjs_app_secrets_back_json" {
+variable "backend_secrets_json" {
   type        = string
   description = "JSON payload for back service secret"
   sensitive   = true
@@ -40,7 +40,7 @@ variable "cloudflare_cert_manager_json" {
   sensitive   = true
 }
 
-variable "cloudflare_cert_manager_front_json" {
+variable "cloudflare_cert_manager_secondary_json" {
   type        = string
   description = "JSON payload with Cloudflare API token for cert-manager DNS solver dedicated to example.com / example.net"
   sensitive   = true
