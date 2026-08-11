@@ -107,6 +107,7 @@ A vertical slice: exporter → alert rules → dashboard → Compose/k8s deploys
 - **Compose specifics:** the project name is pinned (`name: vehicle-telemetry`) so volumes can't collide with another `compose-stack` directory, and services deliberately have no `container_name`. `ANTHROPIC_API_KEY` is *not* marked required with `:?` — compose interpolates services outside the active profile, so that would break the demo; the agent checks at startup instead.
 - **`.env.demo` is committed and must stay secret-free.** `.env` is gitignored. No real credentials or device IDs anywhere: docs use `1234567890`, manifests use `REPLACE_WITH_*`.
 - **The triage agent is read-only by construction** — three query tools, a bounded loop, and no ability to restart or silence anything. Don't add a mutating tool to it.
+- **The design rationale for the agent and the MCP server lives in `observability/vehicle-telemetry/docs/agent-and-mcp.md`.** Read it before changing either one — it records why the loop is hand-written rather than the SDK tool runner, why the tool surfaces differ in size, and why the cabinet's command endpoints are deliberately unreachable from the model.
 - Validate with:
   ```bash
   python3 -m compileall -q observability/vehicle-telemetry

@@ -40,6 +40,9 @@ voltage sagged — no change to the agent was needed for that, it simply has mor
 Nothing here is vehicle-specific. Point `PROMETHEUS_URL` / `LOKI_URL` at any stack and
 it triages whatever alerts you route to it.
 
+> 📖 For why this is an agent rather than an MCP server, and how the two fit together, see
+> **[Agent and MCP: who owns the loop](../docs/agent-and-mcp.md)**.
+
 ---
 
 ## 🗺️ How it works

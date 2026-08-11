@@ -257,15 +257,27 @@ Loki for the selected device, and a Loki panel with the stack's own container ou
 
 ## 🤖 The AI layer
 
-Two different things, deliberately:
+Two components that look alike and are architecturally opposite. **The difference is which
+side of the process boundary the loop falls on.**
 
 | | What it is | When it runs |
 |---|---|---|
-| 🔎 **[agent/](agent)** — alert-triage | An Alertmanager **webhook**: Claude gets the alert plus read-only PromQL/LogQL tools and returns a diagnosis with evidence instead of a threshold | Autonomously, in the alerting path |
-| 🔭 **[mcp/observability-ops](../../mcp/observability-ops)** | An **MCP server**: 13 tools that let an assistant query this stack (or any Prometheus/Loki/Alertmanager) from a conversation | Interactively, when you ask |
+| 🔎 **[agent/](agent)** — alert-triage | An Alertmanager **webhook**. It owns a loop — `for round_no in range(MAX_TOOL_ROUNDS)` — calling Claude with read-only PromQL/LogQL tools until a diagnosis comes back | Autonomously, in the alerting path |
+| 🔭 **[mcp/observability-ops](../../mcp/observability-ops)** | An **MCP server**. No model, no API key, no loop — `mcp.run()` registers its tools and waits. The loop belongs to the client | Interactively, when you ask |
 
-The triage agent is opt-in — `--profile triage` plus an `ANTHROPIC_API_KEY` — and read-only
-by construction: three query tools, no ability to restart anything or silence an alert.
+Everything else follows from that. The agent needs three tools because it has one job; the
+server needs thirteen because you set the task and it isn't known in advance. The agent runs
+while you sleep; the server does nothing until you ask. The agent holds an API key; the server
+never sees one.
+
+Both are read-only where it counts: the agent has three query tools and no way to restart or
+silence anything, and the server's two silence tools don't even register unless
+`OBS_MCP_ALLOW_WRITE` is set.
+
+> 📖 **[Agent and MCP: who owns the loop](docs/agent-and-mcp.md)** — the long-form version:
+> why an agent rather than a dashboard, the four design decisions that only show up in
+> production, how both attach to the closed web cabinet, the Telegram token trap, and where to
+> take them next.
 
 ---
 
